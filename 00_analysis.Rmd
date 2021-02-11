@@ -1,0 +1,111 @@
+---
+title: "PHOSP-COVID report"
+author: "PHOSP-COVID collaborative"
+date: "10/02/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE)
+library(tidyverse)
+library(finalfit)
+library(knitr)
+source("01_data_pull.R")
+lastrun = Sys.time()
+source("02_functions.R")
+source("03_prep.R")
+```
+
+Dynamic content updated: `r lastrun`. 
+
+```{r eval=FALSE, include=FALSE}
+# For exploration 
+phosp_hosp = readRDS("phosp_hosp.rds")
+```
+
+```{r}
+dependent = "crf1a_resp_support"
+explanatory = c("age_admission", "crf1a_sex", 
+                "crf1b_eth", "crf1b_income", "crf1b_edu",
+                "crf1a_pregnant_yn",
+                "crf1a_post_partum_yn",
+                
+                # Comorbidities
+                'crf1a_com_card_mi', 'crf1a_com_card_ihd', 
+                'crf1a_com_card_af', 'crf1a_com_card_ht', 
+                'crf1a_com_card_chf', 'crf1a_com_card_chd', 
+                'crf1a_com_card_vhd', 'crf1a_com_card_pid', 
+                'crf1a_com_card_pvd', 'crf1a_com_card_hcd', 
+                'crf1a_com_card_catia', 
+                #'crf1a_com_card_other_yn', 'crf1a_com_card_other', 
+                #''crf1a_com_neupsy_dem', 
+                #'crf1a_com_neupsy_other_yn', 
+                'crf1a_com_neupsy_da', 
+                'crf1a_com_neupsy_chron', 'crf1a_com_neupsy_pam', 
+                'crf1a_com_neupsy_ptm', 
+                #'crf1a_com_neupsy_other', 
+                'crf1a_com_res_copd', 'crf1a_com_res_ast', 
+                'crf1a_com_res_ild_yn', 'crf1a_com_res_bron', 
+                'crf1a_com_res_osa', 'crf1a_com_res_ohs', 
+                'crf1a_com_res_pe', #'crf1a_com_res_other_yn', 
+                #'crf1a_com_res_ild', 'crf1a_com_res_other', 
+                'crf1a_com_rheu_ctd', 'crf1a_com_rheu_ra', 
+                'crf1a_com_rheu_ost', 
+                #'crf1a_com_rheu_other_yn', 'crf1a_com_rheu_other', 
+                'crf1a_com_gast_pud', 
+                'crf1a_com_gast_ld', 'crf1a_com_gast_gord', 
+                'crf1a_com_gast_ibd', 'crf1a_com_gast_ibs', 
+                #'crf1a_com_gast_other_yn', 'crf1a_com_gast_other', 
+                'crf1a_com_mer_diab', 'crf1a_com_mer_diab_com', 
+                'crf1a_com_mer_hypot', 'crf1a_com_mer_hypert', 
+                'crf1a_com_mer_ckd_yn', 
+                #'crf1a_com_mer_other_yn', 
+                'crf1a_com_mer_ckd_stage', 
+                #'crf1a_com_mer_other', 
+                'crf1a_com_mh_stm', #'crf1a_com_mh_stm_detail', 
+                'crf1a_com_mh_leuk_yn', 'crf1a_com_mh_lymp_yn', 
+                #'crf1a_com_mh_other_yn', 
+                #''crf1a_com_mh_leuk_detail', 
+                #'crf1a_com_mh_lymp', 
+                #'crf1a_com_mh_other', 
+                'crf1a_com_id_aids', 'crf1a_com_id_hiv', 
+                'crf1a_com_id_cvh', 'crf1a_com_id_mt',
+                #'crf1a_com_id_other_yn'
+                
+                # Symptoms
+                'crf1a_fever_history', 'crf1a_cough', 'crf1a_cough_sputum', 'crf1a_cough_blood', 
+                'crf1a_sore_throat', 'crf1a_runny_nose', 'crf1a_ear_pain', 'crf1a_wheezing', 
+                'crf1a_chest_pain', 'crf1a_muscle_aches', 'crf1a_join_pain', 'crf1a_fatigue', 
+                'crf1a_shortness_breath', 'crf1a_loss_taste', 'crf1a_loss_smell', 'crf1a_chest_indrawing', 
+                'crf1a_headache', 'crf1a_confusion', 'crf1a_seizures', 'crf1a_pain', 'crf1a_nausea', 
+                'crf1a_diarrhoea', 'crf1a_conjunctivitis', 'crf1a_skin_rash', 'crf1a_skin_ulcers', 
+                'crf1a_lymphadenopathy', 'crf1a_bleeding'
+                )
+```
+
+
+
+## Data completeness
+
+```{r}
+phosp_hosp %>% 
+  select(dependent, explanatory) %>% 
+  missing_glimpse() %>% 
+  mytable()
+```
+
+# Table 1
+
+Stratified by maximal level of support. 
+
+```{r}
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
