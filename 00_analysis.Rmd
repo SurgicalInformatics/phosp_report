@@ -9,16 +9,45 @@ output: html_document
 knitr::opts_chunk$set(echo = FALSE,
                       warning = FALSE,
                       message = FALSE)
-library(tidyverse)
 library(finalfit)
 library(knitr)
+library(tidyverse)
+# library(downloadthis)
+library(rmarkdown)
+```
+
+```{r, include=FALSE}
+# Pull and prep
 source("01_data_pull.R")
 lastrun = Sys.time()
 source("02_functions.R")
 source("03_prep.R")
 ```
 
+```{r eval=FALSE, include=FALSE}
+# Render PDF
+if (knitr::is_html_output()){
+options(knitr.duplicate.label = "allow")
+rmarkdown::render('00_analysis.Rmd', output_format = 'pdf_document', output_file = 'phosp_report.pdf', 
+                  envir = new.env(), clean = T)
+}
+```
+
 Dynamic content updated: `r lastrun`. 
+
+```{r eval=FALSE, include=FALSE}
+if (knitr::is_html_output()){
+  download_file(
+  path = 'phosp_report.pdf',
+  output_name = "PHOSP-COVID report",
+  button_label = "Download PDF",
+  button_type = "danger",
+  has_icon = TRUE,
+  icon = "fa fa-save",
+  self_contained = FALSE
+)
+}
+```
 
 ```{r eval=FALSE, include=FALSE}
 # For exploration 
@@ -26,7 +55,6 @@ phosp_hosp = readRDS("phosp_hosp.rds")
 ```
 
 ```{r}
-dependent = "crf1a_resp_support"
 explanatory = c("age_admission", "crf1a_sex", 
                 "crf1b_eth", "crf1b_income", "crf1b_edu",
                 "crf1a_pregnant_yn",
@@ -85,22 +113,53 @@ explanatory = c("age_admission", "crf1a_sex",
                 )
 ```
 
+## Patients by tiers
 
+```{r}
+phosp_hosp %>% 
+  count(tier) %>% 
+  mytable()
+```
+
+All analyses below are for tier 2 patients only. 
+
+```{r}
+phosp_hosp = phosp_hosp %>% 
+  filter(tier == 2)
+```
 
 ## Data completeness
 
 ```{r}
+dependent = "crf1a_resp_support_4levels"
 phosp_hosp %>% 
   select(dependent, explanatory) %>% 
   missing_glimpse() %>% 
   mytable()
 ```
 
+
 # Table 1
 
 Stratified by maximal level of support. 
 
 ```{r}
+dependent = "crf1a_resp_support_4levels"
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+# Appendix
+
+Stratified by maximal level of support. 
+
+```{r}
+dependent = "crf1a_resp_support_8levels"
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory, 
                      na_include = TRUE, na_include_dependent = TRUE,
