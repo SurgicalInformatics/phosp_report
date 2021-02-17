@@ -2,11 +2,13 @@
 title: "PHOSP-COVID report"
 author: "PHOSP-COVID collaborative"
 date: "10/02/2021"
-output: html_document
+output:
+  html_document:
+    code_folding: hide
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = FALSE,
+knitr::opts_chunk$set(echo = TRUE,
                       warning = FALSE,
                       message = FALSE)
 library(finalfit)
@@ -16,7 +18,7 @@ library(tidyverse)
 library(rmarkdown)
 ```
 
-```{r, include=FALSE}
+```{r}
 # Pull and prep
 source("01_data_pull.R")
 lastrun = Sys.time()
@@ -32,8 +34,6 @@ rmarkdown::render('00_analysis.Rmd', output_format = 'pdf_document', output_file
                   envir = new.env(), clean = T)
 }
 ```
-
-Dynamic content updated: `r lastrun`. 
 
 ```{r eval=FALSE, include=FALSE}
 if (knitr::is_html_output()){
@@ -52,15 +52,26 @@ if (knitr::is_html_output()){
 ```{r eval=FALSE, include=FALSE}
 # For exploration 
 phosp_hosp = readRDS("phosp_hosp.rds")
+phosp_six = readRDS("phosp_six.rds")
+lastrun = Sys.time()
+source("02_functions.R")
 ```
 
+Dynamic content updated: `r lastrun`. 
+
 ```{r}
+# Define variable sets
+## These will likely changed and be moved to analysis chunks
 explanatory = c("age_admission", "crf1a_sex", 
-                "crf1b_eth", "crf1b_income", "crf1b_edu",
+                "crf1b_eth_5levels", 
+                
+                "crf1b_income", 
+                "crf1b_edu",
                 "crf1a_pregnant_yn",
                 "crf1a_post_partum_yn",
                 
                 # Comorbidities
+                'no_comorbid',
                 'crf1a_com_card_mi', 'crf1a_com_card_ihd', 
                 'crf1a_com_card_af', 'crf1a_com_card_ht', 
                 'crf1a_com_card_chf', 'crf1a_com_card_chd', 
@@ -111,6 +122,31 @@ explanatory = c("age_admission", "crf1a_sex",
                 'crf1a_diarrhoea', 'crf1a_conjunctivitis', 'crf1a_skin_rash', 'crf1a_skin_ulcers', 
                 'crf1a_lymphadenopathy', 'crf1a_bleeding'
                 )
+
+explanatory_symptoms = c("psq_scale_blness_pre", "psq_scale_fatigue_pre", "psq_scale_cough_pre", 
+                "psq_scale_pain_pre", "psq_scale_sleep_pre", 
+                
+                "mrcds_blness_exer_pre", "mrcds_short_level_pre",
+                "mrcds_walk_slower_pre", "mrcds_after_walk_pre", "mrcds_leave_house_pre"
+)  
+
+explanatory_duration = c("crf1a_symptom_duration", 
+                "crf1a_admission_duration")
+
+explanatory_complications = c("crf1a_add_diag_pemt", "crf1a_add_diag_myoc",
+                              "crf1a_add_diag_cmp", "crf1a_add_diag"
+)
+
+explanatory_treatment = c("crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
+
+explanatory_trials = c("crf1a_studies___2", "crf1a_studies___3", "crf1a_studies___4", 
+                          "crf1a_studies___5", "crf1a_studies___6", "crf1a_studies___7", 
+                          "crf1a_studies___8", "crf1a_studies___9", "crf1a_studies___10", 
+                          "crf1a_studies___11", "crf1a_studies___12", "crf1a_studies___13", 
+                          "crf1a_studies___14", "crf1a_studies___15", "crf1a_studies___16", 
+                          "crf1a_studies___17", "crf1a_studies___18", "crf1a_studies___19",
+                          "crf1a_studies___20", "crf1a_studies___21")
+
 ```
 
 ## Patients by tiers
@@ -130,6 +166,8 @@ phosp_hosp = phosp_hosp %>%
 
 ## Data completeness
 
+### Demographics
+
 ```{r}
 dependent = "crf1a_resp_support_4levels"
 phosp_hosp %>% 
@@ -138,8 +176,100 @@ phosp_hosp %>%
   mytable()
 ```
 
+### Symptoms
 
-# Table 1
+```{r}
+phosp_six %>% 
+  select(explanatory_symptoms) %>% 
+  missing_glimpse() %>% 
+  mytable()
+```
+
+### Dates
+
+```{r}
+phosp_hosp %>% 
+  select(
+    crf1a_date_first_symptoms, crf1a_date_adm, crf1a_date_dis,
+    explanatory_duration) %>% 
+  missing_glimpse() %>% 
+  mytable()
+```
+
+### Complications
+
+```{r}
+phosp_hosp %>% 
+  select(explanatory_complications) %>% 
+  missing_glimpse() %>% 
+  mytable()
+```
+
+### Treatment
+
+```{r}
+phosp_hosp %>% 
+  select(explanatory_treatment) %>% 
+  missing_glimpse() %>% 
+  mytable()
+```
+
+
+## Missing data maps (light blue missing)
+
+```{r fig.height=12, fig.width=8}
+phosp_hosp %>% 
+  select(explanatory, 
+                 explanatory_duration, 
+                 explanatory_complications,
+                 explanatory_treatment) %>% 
+  remove_labels() %>% 
+  missing_plot()
+```
+
+
+```{r fig.height=2, fig.width=8}
+phosp_six %>% 
+    select(explanatory_symptoms) %>% 
+  remove_labels() %>% 
+  missing_plot()
+```
+
+## Distribution examples
+
+### Admission and symptom 
+
+Including out-of-range values
+
+```{r}
+phosp_hosp %>% 
+  select(explanatory_duration) %>% 
+  pivot_longer(explanatory_duration) %>% 
+  ggplot_lancet(aes(value, fill = name)) +
+  geom_density() + 
+  facet_wrap(~ name) + 
+  labs(x = "Days") + 
+  theme(legend.position = "none")
+```
+
+Filtered >=0, <=100 days
+
+```{r}
+phosp_hosp %>% 
+  select(explanatory_duration) %>% 
+  pivot_longer(explanatory_duration) %>% 
+  filter(value >= 0) %>% 
+  filter(value <= 100) %>% 
+  ggplot_lancet(aes(value, fill = name)) +
+  geom_density() + 
+  facet_wrap(~ name) + 
+  labs(x = "Days") + 
+  theme(legend.position = "none")
+```
+
+## Tables
+
+### Table 1A. Patient characteristics stratifed by maximal level of organ support.
 
 Stratified by maximal level of support. 
 
@@ -150,6 +280,64 @@ phosp_hosp %>%
                      na_include = TRUE, na_include_dependent = TRUE,
                      add_col_totals = TRUE, add_row_totals = TRUE,
                      total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 1B. Pre-existing symptoms stratifed by maximal level of organ support.
+
+```{r}
+phosp_six %>% 
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory_symptoms, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+### Table 1C. Symptom and admission duration stratifed by maximal level of organ support.
+
+```{r}
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory_duration, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 1D. Symptom and admission duration stratifed by maximal level of organ support.
+
+```{r}
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory_complications, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 1E. Treatments stratifed by maximal level of organ support.
+
+```{r}
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory_treatment, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 1F. Trial involvement stratifed by maximal level of organ support.
+
+```{r}
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory_trials, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  ff_remove_ref() %>% 
+  select(-levels) %>% 
   mytable()
 ```
 
