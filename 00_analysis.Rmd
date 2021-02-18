@@ -52,7 +52,7 @@ if (knitr::is_html_output()){
 ```{r eval=FALSE, include=FALSE}
 # For exploration 
 phosp_hosp = readRDS("phosp_hosp.rds")
-phosp_six = readRDS("phosp_six.rds")
+phosp_3m = readRDS("phosp_3m.rds")
 lastrun = Sys.time()
 source("02_functions.R")
 ```
@@ -179,7 +179,7 @@ phosp_hosp %>%
 ### Symptoms
 
 ```{r}
-phosp_six %>% 
+phosp_3m %>% 
   select(explanatory_symptoms) %>% 
   missing_glimpse() %>% 
   mytable()
@@ -229,7 +229,7 @@ phosp_hosp %>%
 
 
 ```{r fig.height=2, fig.width=8}
-phosp_six %>% 
+phosp_3m %>% 
     select(explanatory_symptoms) %>% 
   remove_labels() %>% 
   missing_plot()
@@ -267,6 +267,17 @@ phosp_hosp %>%
   theme(legend.position = "none")
 ```
 
+### Discharge date
+
+```{r}
+phosp_hosp %>% 
+  ggplot_lancet(aes(crf1a_date_dis)) +
+  geom_histogram(fill = "lightblue", bins = 200) +
+  labs(x = "Discharge date") + 
+  ggtitle("Discharge date histogram")
+```
+
+
 ## Tables
 
 ### Table 1A. Patient characteristics stratifed by maximal level of organ support.
@@ -286,7 +297,7 @@ phosp_hosp %>%
 ### Table 1B. Pre-existing symptoms stratifed by maximal level of organ support.
 
 ```{r}
-phosp_six %>% 
+phosp_3m %>% 
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
   summary_factorlist(dependent,  explanatory_symptoms, 
                      na_include = TRUE, na_include_dependent = TRUE,
