@@ -352,6 +352,213 @@ phosp_hosp %>%
   mytable()
 ```
 
+### Table 2A. Occupation and caring before COVID-19. 
+
+```{r}
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory = c("crf1b_healthcare_worker", 
+                                                 "crf1b_caring"),
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 2B. Occupations and caring after COVID-19
+
+```{r}
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory = c("patient_sq_q", "patient_sq_q_today", "patient_sq_q_change",
+                                                 "patient_sq_p_smoking", "patient_sq_p_drinking",
+                                                 "patient_sq_p_eating", "patient_sq_p_activity"),
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+Needs loneliness and clarification of which EQ5D value is needed, `eq5d5l_summary`?
+
+### Table 3A. HRQOL since. 
+
+```{r}
+explanatory_symptoms_since = c("psq_scale_blness_since", "psq_scale_fatigue_since", "psq_scale_cough_since", 
+                "psq_scale_pain_since", "psq_scale_sleep_since", 
+                
+                "mrcds_blness_exer_since", "mrcds_short_level_since",
+                "mrcds_walk_slower_since", "mrcds_after_walk_since", "mrcds_leave_house_since"
+) 
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory_symptoms_since,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+### Table 3B. Dyspnoea. 
+```{r}
+explanatory_dyspnoea = phosp_3m %>% 
+  select(starts_with("dyspnoea_")) %>% 
+  names()
+
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent, explanatory_dyspnoea,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3C. FACIT. 
+```{r}
+explanatory_facit = phosp_3m %>% 
+  select(starts_with("facit_"), -facit_date) %>% 
+  names()
+
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent, explanatory_facit,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3D. BPI. 
+```{r}
+explanatory_bpi = phosp_3m %>% 
+  select(starts_with("bpi_"), -bpi_date) %>% 
+  names()
+
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent, explanatory_bpi,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+### Table 3F. GAD7. 
+```{r}
+explanatory_gad7 = phosp_3m %>% 
+  select(starts_with("gad7_"), -gad7_date) %>% 
+  names()
+
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent, explanatory_gad7,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3G. PHQ9. 
+```{r}
+explanatory_phq9 = phosp_3m %>% 
+  select(starts_with("phq9_"), -phq9_date) %>% 
+  names()
+
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent, explanatory_phq9,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3H. PCL5. 
+```{r}
+explanatory_pcl5 = phosp_3m %>% 
+  select(starts_with("pcl5_"), -pcl5_date) %>% 
+  names()
+
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent, explanatory_pcl5,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3I. Nottingham ADL. 
+```{r}
+explanatory_neadl = phosp_3m %>% 
+  select(starts_with("neadl_"), -neadl_date) %>% 
+  names()
+
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent, explanatory_neadl,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 4
+
+PFTs need a bit of looking at. Multiple sets of PFTs can be present at each visit. 
+
+e.g. number of patients with more than one PFT record (some may be empty):
+
+```{r}
+phosp %>% 
+  filter(redcap_event_name== "3 Months (1st Research Visit)") %>% 
+  filter(redcap_repeat_instrument == "Pulmonary Functional Tests") %>% 
+  filter(pft_spm_done == "Yes") %>% 
+  count(redcap_repeat_instance)
+```
+
+```{r}
+phosp_3m_pft = phosp %>% 
+  filter(redcap_event_name== "3 Months (1st Research Visit)") %>% 
+  filter(redcap_repeat_instrument == "Pulmonary Functional Tests") %>% 
+  filter(pft_spm_done == "Yes") %>% 
+  select(study_id, starts_with("pft_")) %>% 
+  distinct(study_id, .keep_all = TRUE) # Note this takes the first set per patient - needs fixed/decision
+```
+
+```{r}
+explanatory_pft = phosp_3m_pft %>% 
+  select(-c(study_id, pft_spm_done, pft_spm_reason_not_done, pft_spm_date, pft_tlco_date, pft_kco_date, 
+            pft_mip_date, pft_mep_date)) %>% 
+  names()
+
+phosp_3m_pft %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  mutate(across(c(pft_tlco_reading1, pft_tlco_reading2, pft_kco_reading1, pft_kco_reading2, 
+                  pft_mip_reading, pft_mip_reading2, pft_mep_reading1, pft_mep_reading2), as.numeric)
+  ) %>% 
+  ff_relabel_df(phosp_3m_pft) %>% 
+  summary_factorlist(dependent, explanatory_pft, cont = "median",
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+```{r fig.height=8, fig.width=8}
+
+phosp_3m_pft %>%
+  mutate(across(c(pft_tlco_reading1, pft_tlco_reading2, pft_kco_reading1, pft_kco_reading2, 
+                  pft_mip_reading, pft_mip_reading2, pft_mep_reading1, pft_mep_reading2), as.numeric)
+  ) %>% 
+  ff_relabel_df(phosp_3m_pft) %>% 
+  select(is.numeric) %>% 
+  gather() %>% 
+  drop_na(value) %>% 
+  ggplot_lancet(aes(value)) + 
+  geom_histogram(fill = "lightblue")  + 
+  facet_wrap(~ key, ncol = 3, scales = "free")
+```
+
 
 # Appendix
 
