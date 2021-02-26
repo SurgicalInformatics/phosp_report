@@ -27,32 +27,11 @@ source("03_prep.R")
 ```
 
 ```{r eval=FALSE, include=FALSE}
-# Render PDF
-if (knitr::is_html_output()){
-options(knitr.duplicate.label = "allow")
-rmarkdown::render('00_analysis.Rmd', output_format = 'pdf_document', output_file = 'phosp_report.pdf', 
-                  envir = new.env(), clean = T)
-}
-```
-
-```{r eval=FALSE, include=FALSE}
-if (knitr::is_html_output()){
-  download_file(
-  path = 'phosp_report.pdf',
-  output_name = "PHOSP-COVID report",
-  button_label = "Download PDF",
-  button_type = "danger",
-  has_icon = TRUE,
-  icon = "fa fa-save",
-  self_contained = FALSE
-)
-}
-```
-
-```{r eval=FALSE, include=FALSE}
 # For exploration 
+phosp = readRDS("phosp.rds")
 phosp_hosp = readRDS("phosp_hosp.rds")
 phosp_3m = readRDS("phosp_3m.rds")
+load("helpers.rda")
 lastrun = Sys.time()
 source("02_functions.R")
 ```
@@ -157,11 +136,29 @@ phosp_hosp %>%
   mytable()
 ```
 
-All analyses below are for tier 2 patients only. 
+## Patients by tier with discharge on or before 30 Nov 2020
+
+```{r}
+phosp_hosp %>% 
+  filter(study_id %in% study_id_before_end_nov) %>% 
+  count(tier) %>% 
+  mytable()
+```
+
+All analyses below are for tier 2 patients discharged on or before 30th Nov 2020. 
 
 ```{r}
 phosp_hosp = phosp_hosp %>% 
-  filter(tier == 2)
+  filter(tier == 2) %>% 
+  filter(study_id %in% study_id_before_end_nov)
+
+phosp_3m = phosp_3m %>% 
+  filter(tier == 2) %>% 
+  filter(study_id %in% study_id_before_end_nov)
+
+phosp = phosp %>% 
+  filter(tier == 2) %>% 
+  filter(study_id %in% study_id_before_end_nov)
 ```
 
 ## Data completeness
@@ -526,32 +523,23 @@ phosp_3m_pft = phosp %>%
 ```
 
 ```{r}
-explanatory_pft = phosp_3m_pft %>% 
-  select(-c(study_id, pft_spm_done, pft_spm_reason_not_done, pft_spm_date, pft_tlco_date, pft_kco_date, 
-            pft_mip_date, pft_mep_date)) %>% 
-  names()
+explanatory_pft = c("pft_fev1", "pft_fev1_perc_pred", 
+                    "pft_fvc", "pft_fvc_perc_pred",
+                    "pft_fev1_fvc",
+                    "pft_kco",
+                    "pft_mip", "pft_mep")
 
 phosp_3m_pft %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
-  mutate(across(c(pft_tlco_reading1, pft_tlco_reading2, pft_kco_reading1, pft_kco_reading2, 
-                  pft_mip_reading, pft_mip_reading2, pft_mep_reading1, pft_mep_reading2), as.numeric)
-  ) %>% 
-  ff_relabel_df(phosp_3m_pft) %>% 
   summary_factorlist(dependent, explanatory_pft, cont = "median",
-                     na_include = TRUE, na_include_dependent = TRUE,
+                     na_include = TRUE, na_include_dependent = TRUE, add_row_totals = TRUE,
                      total_col = TRUE) %>% 
   mytable()
 ```
 
-
-```{r fig.height=8, fig.width=8}
-
+```{r fig.height=4, fig.width=8}
 phosp_3m_pft %>%
-  mutate(across(c(pft_tlco_reading1, pft_tlco_reading2, pft_kco_reading1, pft_kco_reading2, 
-                  pft_mip_reading, pft_mip_reading2, pft_mep_reading1, pft_mep_reading2), as.numeric)
-  ) %>% 
-  ff_relabel_df(phosp_3m_pft) %>% 
-  select(is.numeric) %>% 
+  select(explanatory_pft) %>% 
   gather() %>% 
   drop_na(value) %>% 
   ggplot_lancet(aes(value)) + 
