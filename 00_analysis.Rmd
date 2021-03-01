@@ -3,8 +3,14 @@ title: "PHOSP-COVID report"
 author: "PHOSP-COVID collaborative"
 date: "10/02/2021"
 output:
+  word_document:
+    toc: yes
+    toc_depth: '3'
   html_document:
     code_folding: hide
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
 ---
 
 ```{r setup, include=FALSE}
@@ -16,6 +22,9 @@ library(knitr)
 library(tidyverse)
 # library(downloadthis)
 library(rmarkdown)
+
+
+summary_factorlist <- purrr::partial(finalfit::summary_factorlist, na_to_prop = FALSE)
 ```
 
 ```{r}
@@ -43,6 +52,7 @@ Dynamic content updated: `r lastrun`.
 ## These will likely changed and be moved to analysis chunks
 explanatory = c("age_admission", "crf1a_sex", 
                 "crf1b_eth_5levels", 
+                "crf3a_bmi",
                 
                 "crf1b_income", 
                 "crf1b_edu",
@@ -50,47 +60,11 @@ explanatory = c("age_admission", "crf1a_sex",
                 "crf1a_post_partum_yn",
                 
                 # Comorbidities
-                'no_comorbid',
-                'crf1a_com_card_mi', 'crf1a_com_card_ihd', 
-                'crf1a_com_card_af', 'crf1a_com_card_ht', 
-                'crf1a_com_card_chf', 'crf1a_com_card_chd', 
-                'crf1a_com_card_vhd', 'crf1a_com_card_pid', 
-                'crf1a_com_card_pvd', 'crf1a_com_card_hcd', 
-                'crf1a_com_card_catia', 
-                #'crf1a_com_card_other_yn', 'crf1a_com_card_other', 
-                #''crf1a_com_neupsy_dem', 
-                #'crf1a_com_neupsy_other_yn', 
-                'crf1a_com_neupsy_da', 
-                'crf1a_com_neupsy_chron', 'crf1a_com_neupsy_pam', 
-                'crf1a_com_neupsy_ptm', 
-                #'crf1a_com_neupsy_other', 
-                'crf1a_com_res_copd', 'crf1a_com_res_ast', 
-                'crf1a_com_res_ild_yn', 'crf1a_com_res_bron', 
-                'crf1a_com_res_osa', 'crf1a_com_res_ohs', 
-                'crf1a_com_res_pe', #'crf1a_com_res_other_yn', 
-                #'crf1a_com_res_ild', 'crf1a_com_res_other', 
-                'crf1a_com_rheu_ctd', 'crf1a_com_rheu_ra', 
-                'crf1a_com_rheu_ost', 
-                #'crf1a_com_rheu_other_yn', 'crf1a_com_rheu_other', 
-                'crf1a_com_gast_pud', 
-                'crf1a_com_gast_ld', 'crf1a_com_gast_gord', 
-                'crf1a_com_gast_ibd', 'crf1a_com_gast_ibs', 
-                #'crf1a_com_gast_other_yn', 'crf1a_com_gast_other', 
-                'crf1a_com_mer_diab', 'crf1a_com_mer_diab_com', 
-                'crf1a_com_mer_hypot', 'crf1a_com_mer_hypert', 
-                'crf1a_com_mer_ckd_yn', 
-                #'crf1a_com_mer_other_yn', 
-                'crf1a_com_mer_ckd_stage', 
-                #'crf1a_com_mer_other', 
-                'crf1a_com_mh_stm', #'crf1a_com_mh_stm_detail', 
-                'crf1a_com_mh_leuk_yn', 'crf1a_com_mh_lymp_yn', 
-                #'crf1a_com_mh_other_yn', 
-                #''crf1a_com_mh_leuk_detail', 
-                #'crf1a_com_mh_lymp', 
-                #'crf1a_com_mh_other', 
-                'crf1a_com_id_aids', 'crf1a_com_id_hiv', 
-                'crf1a_com_id_cvh', 'crf1a_com_id_mt',
-                #'crf1a_com_id_other_yn'
+                
+                "crf1a_com_card", "crf1a_com_neupsy",
+                "crf1a_com_res", "crf1a_com_rheu",
+                "crf1a_com_gast", "crf1a_com_mer", 
+                "crf1a_com_mh", "crf1a_com_id", 
                 
                 # Symptoms
                 'crf1a_fever_history', 'crf1a_cough', 'crf1a_cough_sputum', 'crf1a_cough_blood', 
@@ -128,7 +102,11 @@ explanatory_trials = c("crf1a_studies___2", "crf1a_studies___3", "crf1a_studies_
 
 ```
 
-## Patients by tiers
+# Main results
+
+## Patients by tier
+
+### All
 
 ```{r}
 phosp_hosp %>% 
@@ -136,7 +114,7 @@ phosp_hosp %>%
   mytable()
 ```
 
-## Patients by tier with discharge on or before 30 Nov 2020
+### Discharge on or before 30 Nov 2020
 
 ```{r}
 phosp_hosp %>% 
@@ -160,6 +138,13 @@ phosp = phosp %>%
   filter(tier == 2) %>% 
   filter(study_id %in% study_id_before_end_nov)
 ```
+
+```{r}
+# Any joins can be temporarily done here, then moved to cleaning. 
+phosp_hosp = phosp_hosp %>% 
+  left_join(phosp %>% select(study_id, crf3a_bmi) %>% drop_na())
+```
+
 
 ## Data completeness
 
@@ -265,7 +250,6 @@ phosp_hosp %>%
 ```
 
 ### Discharge date
-
 ```{r}
 phosp_hosp %>% 
   ggplot_lancet(aes(crf1a_date_dis)) +
@@ -285,14 +269,13 @@ Stratified by maximal level of support.
 dependent = "crf1a_resp_support_4levels"
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory, 
-                     na_include = TRUE, na_include_dependent = TRUE,
+                     na_include = TRUE, na_include_dependent = TRUE, cont = "median",
                      add_col_totals = TRUE, add_row_totals = TRUE,
                      total_col = TRUE) %>% 
   mytable()
 ```
 
 ### Table 1B. Pre-existing symptoms stratifed by maximal level of organ support.
-
 ```{r}
 phosp_3m %>% 
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
@@ -303,9 +286,7 @@ phosp_3m %>%
   mytable()
 ```
 
-
 ### Table 1C. Symptom and admission duration stratifed by maximal level of organ support.
-
 ```{r}
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory_duration, 
@@ -316,7 +297,6 @@ phosp_hosp %>%
 ```
 
 ### Table 1D. Symptom and admission duration stratifed by maximal level of organ support.
-
 ```{r}
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory_complications, 
@@ -327,7 +307,6 @@ phosp_hosp %>%
 ```
 
 ### Table 1E. Treatments stratifed by maximal level of organ support.
-
 ```{r}
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory_treatment, 
@@ -338,7 +317,6 @@ phosp_hosp %>%
 ```
 
 ### Table 1F. Trial involvement stratifed by maximal level of organ support.
-
 ```{r}
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory_trials, 
@@ -350,7 +328,6 @@ phosp_hosp %>%
 ```
 
 ### Table 2A. Occupation and caring before COVID-19. 
-
 ```{r}
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory = c("crf1b_healthcare_worker", 
@@ -360,8 +337,7 @@ phosp_hosp %>%
   mytable()
 ```
 
-### Table 2B. Occupations and caring after COVID-19
-
+### Table 2B. Occupations and caring after COVID-19.
 ```{r}
 phosp_3m %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
@@ -373,25 +349,66 @@ phosp_3m %>%
   mytable()
 ```
 
-Needs loneliness and clarification of which EQ5D value is needed, `eq5d5l_summary`?
+### Table 3. EQ5D pre.
+```{r}
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory = c( "eq5d5l_summary_pre",
+                                                  "eq5d5l_q1_pre", "eq5d5l_q2_pre", "eq5d5l_q3_pre", 
+                                                 "eq5d5l_q4_pre", "eq5d5l_q5_pre"),
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     include_row_missing_col = FALSE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
 
-### Table 3A. HRQOL since. 
+### Table 3. EQ5D 3 months.
+```{r}
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory = c( "eq5d5l_summary",
+                                                  "eq5d5l_q1", "eq5d5l_q2", "eq5d5l_q3", 
+                                                 "eq5d5l_q4", "eq5d5l_q5"),
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     include_row_missing_col = FALSE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3. EQ5D difference.
+
+3 months vs. pre-covid. Negative values represent worse health, postive values better health. 
 
 ```{r}
-explanatory_symptoms_since = c("psq_scale_blness_since", "psq_scale_fatigue_since", "psq_scale_cough_since", 
-                "psq_scale_pain_since", "psq_scale_sleep_since", 
-                
-                "mrcds_blness_exer_since", "mrcds_short_level_since",
-                "mrcds_walk_slower_since", "mrcds_after_walk_since", "mrcds_leave_house_since"
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory = c( "eq5d5l_summary_delta"),
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     include_row_missing_col = FALSE,
+                     total_col = TRUE, p = TRUE) %>% 
+  mytable()
+```
+
+### Table 3A. HRQOL since.
+```{r}
+explanatory_symptoms_since = c(
+  "psq_recovered",
+  "psq_scale_blness_since", "psq_scale_fatigue_since", "psq_scale_cough_since", 
+  "psq_scale_pain_since", "psq_scale_sleep_since", 
+  
+  "mrcds_blness_exer_since", "mrcds_short_level_since",
+  "mrcds_walk_slower_since", "mrcds_after_walk_since", "mrcds_leave_house_since"
 ) 
 phosp_3m %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
   summary_factorlist(dependent,  explanatory_symptoms_since,
                      na_include = TRUE, na_include_dependent = TRUE,
-                     total_col = TRUE) %>% 
+                     total_col = TRUE, add_col_totals = TRUE) %>% 
   mytable()
 ```
-
 
 ### Table 3B. Dyspnoea. 
 ```{r}
@@ -561,4 +578,71 @@ phosp_hosp %>%
                      total_col = TRUE) %>% 
   mytable()
 ```
+
+```{r}
+# For full comorbs supplement
+explanatory = c("age_admission", "crf1a_sex", 
+                "crf1b_eth_5levels", 
+                "crf3a_bmi",
+                
+                "crf1b_income", 
+                "crf1b_edu",
+                "crf1a_pregnant_yn",
+                "crf1a_post_partum_yn",
+                
+                # Comorbidities
+                
+                "crf1a_com_card", "crf1a_com_neupsy",
+                "crf1a_com_res", "crf1a_com_rheu",
+                "crf1a_com_gast", "crf1a_com_mer", 
+                "crf1a_com_mh", "crf1a_com_id", 
+                
+                
+                
+                # Comorbidities
+                'no_comorbid',
+                'crf1a_com_card_mi', 'crf1a_com_card_ihd', 
+                'crf1a_com_card_af', 'crf1a_com_card_ht', 
+                'crf1a_com_card_chf', 'crf1a_com_card_chd', 
+                'crf1a_com_card_vhd', 'crf1a_com_card_pid', 
+                'crf1a_com_card_pvd', 'crf1a_com_card_hcd', 
+                'crf1a_com_card_catia', 
+                #'crf1a_com_card_other_yn', 'crf1a_com_card_other', 
+                #''crf1a_com_neupsy_dem', 
+                #'crf1a_com_neupsy_other_yn', 
+                'crf1a_com_neupsy_da', 
+                'crf1a_com_neupsy_chron', 'crf1a_com_neupsy_pam', 
+                'crf1a_com_neupsy_ptm', 
+                #'crf1a_com_neupsy_other', 
+                'crf1a_com_res_copd', 'crf1a_com_res_ast', 
+                'crf1a_com_res_ild_yn', 'crf1a_com_res_bron', 
+                'crf1a_com_res_osa', 'crf1a_com_res_ohs', 
+                'crf1a_com_res_pe', #'crf1a_com_res_other_yn', 
+                #'crf1a_com_res_ild', 'crf1a_com_res_other', 
+                'crf1a_com_rheu_ctd', 'crf1a_com_rheu_ra', 
+                'crf1a_com_rheu_ost', 
+                #'crf1a_com_rheu_other_yn', 'crf1a_com_rheu_other', 
+                'crf1a_com_gast_pud', 
+                'crf1a_com_gast_ld', 'crf1a_com_gast_gord', 
+                'crf1a_com_gast_ibd', 'crf1a_com_gast_ibs', 
+                #'crf1a_com_gast_other_yn', 'crf1a_com_gast_other', 
+                'crf1a_com_mer_diab', 'crf1a_com_mer_diab_com', 
+                'crf1a_com_mer_hypot', 'crf1a_com_mer_hypert', 
+                'crf1a_com_mer_ckd_yn', 
+                #'crf1a_com_mer_other_yn', 
+                'crf1a_com_mer_ckd_stage', 
+                #'crf1a_com_mer_other', 
+                'crf1a_com_mh_stm', #'crf1a_com_mh_stm_detail', 
+                'crf1a_com_mh_leuk_yn', 'crf1a_com_mh_lymp_yn', 
+                #'crf1a_com_mh_other_yn', 
+                #''crf1a_com_mh_leuk_detail', 
+                #'crf1a_com_mh_lymp', 
+                #'crf1a_com_mh_other', 
+                'crf1a_com_id_aids', 'crf1a_com_id_hiv', 
+                'crf1a_com_id_cvh', 'crf1a_com_id_mt'
+                #'crf1a_com_id_other_yn'
+)
+```
+
+
 

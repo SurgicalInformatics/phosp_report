@@ -70,7 +70,7 @@ phosp = phosp %>%
       crf1b_eth == "Prefer not to say" ~ NA_real_
     ) %>%
       ff_label("Ethinicity"),
-                                
+    
     ## Diabetes yes no
     crf1a_com_mer_diab_yn = if_else(crf1a_com_mer_diab == "Type 1" | crf1a_com_mer_diab == "Type 2", "Yes", "No") %>% 
       ff_label("Diabetes"),
@@ -134,10 +134,68 @@ phosp = phosp %>%
       as.numeric("days") %>% 
       ff_label("Admission duration (days)"),
     
+    
+    # Comorbidities ----
+    ## Make summary variables
+    crf1a_com_card = rowSums(select(., dplyr::starts_with("crf1a_com_card"), -contains("other")) %>% 
+                               mutate(across(everything(), ~ . == "Yes")),
+                             na.rm = TRUE),
+    crf1a_com_res = rowSums(select(., dplyr::starts_with("crf1a_com_res"), -c(contains("other"), crf1a_com_res_ild)) %>% 
+                              mutate(across(everything(), ~ . == "Yes")),
+                            na.rm = TRUE),
+    crf1a_com_gast = rowSums(select(., dplyr::starts_with("crf1a_com_gast"), -contains("other")) %>% 
+                               mutate(across(everything(), ~ . == "Yes")),
+                             na.rm = TRUE),
+    crf1a_com_neupsy = rowSums(select(., dplyr::starts_with("crf1a_com_neupsy"), -c(contains("other"), crf1a_com_res_ild)) %>% 
+                                 mutate(across(everything(), ~ . == "Yes")),
+                               na.rm = TRUE),
+    crf1a_com_rheu = rowSums(select(., dplyr::starts_with("crf1a_com_rheu"), -contains("other")) %>% 
+                               mutate(across(everything(), ~ . == "Yes")),
+                             na.rm = TRUE),
+    crf1a_com_mer = rowSums(select(., dplyr::starts_with("crf1a_com_mer"), -contains("other")) %>% 
+                              mutate(across(everything(), ~ . == "Yes")),
+                            na.rm = TRUE),
+    crf1a_com_mh = rowSums(select(., dplyr::starts_with("crf1a_com_mh"), -c(contains("other"), 
+                                                                            contains("detail"), 
+                                                                            crf1a_com_mh_lymp)) %>% 
+                             mutate(across(everything(), ~ . == "Yes")),
+                           na.rm = TRUE),
+    crf1a_com_id = rowSums(select(., dplyr::starts_with("crf1a_com_id"), -contains("other")) %>% 
+                             mutate(across(everything(), ~ . == "Yes")),
+                           na.rm = TRUE),
+    
+    across(c(crf1a_com_card, crf1a_com_res,
+             crf1a_com_gast, crf1a_com_neupsy,
+             crf1a_com_rheu, crf1a_com_mer, 
+             crf1a_com_mh, crf1a_com_id), 
+           ~ case_when(
+             . > 0 ~ "Yes",
+             TRUE ~ "No") %>% 
+             factor()
+    ),
+    
+    crf1a_com_card = ff_label(crf1a_com_card, "Cardiovascular"), 
+    crf1a_com_res = ff_label(crf1a_com_res, "Respiratory"),
+    crf1a_com_gast = ff_label(crf1a_com_gast, "Gastrointestinal"), 
+    crf1a_com_neupsy = ff_label(crf1a_com_neupsy, "Neurological and psychiatric"),
+    crf1a_com_rheu = ff_label(crf1a_com_rheu, "Rheumatological"), 
+    crf1a_com_mer = ff_label(crf1a_com_mer, "Metabolic/endocrine/renal"), 
+    crf1a_com_mh = ff_label(crf1a_com_mh, "Malignancy"), 
+    crf1a_com_id = ff_label(crf1a_com_id, "Infectious disease"), 
+    
     # Anthro values ----
     ## Height (character)
     crf3a_rest_height = parse_number(crf3a_rest_height),
-  
+    crf3a_rest_weight = parse_number(crf3a_rest_weight),
+    crf3a_bmi = (crf3a_rest_weight / (crf3a_rest_height / 100)^2) %>% 
+      ff_label("BMI"),
+    
+    # PROMs
+    eq5d5l_summary_pre = parse_number(eq5d5l_summary_pre),
+    eq5d5l_summary = parse_number(eq5d5l_summary),
+    eq5d5l_summary_delta = (eq5d5l_summary - eq5d5l_summary_pre) %>% 
+      ff_label("How good or bad is your health overall? 3 months vs pre-covid"),
+    
     
     # Outcomes ----
     ## Respiratory support
@@ -194,7 +252,8 @@ phosp = phosp %>%
   group_by(study_id) %>% 
   fill(age_admission, crf1a_sex,  crf1b_eth_pft, crf3a_rest_height, 
        .direction = "downup") %>% 
-  ungroup
+  ungroup() %>% 
+  ff_relabel_df(phosp)
 
 
 # Temporarily remove out-of-range values for certain variables --------------------------
@@ -204,14 +263,15 @@ phosp = phosp %>%
       age_admission < 18 ~ NA_real_,
       age_admission > 120 ~ NA_real_,
       TRUE ~ age_admission
-      ),
-      
-      crf3a_rest_height = case_when(
-        crf3a_rest_height < 100 ~ NA_real_,
-        crf3a_rest_height > 250 ~ NA_real_,
-        TRUE ~ crf3a_rest_height
-      )
+    ),
+    
+    crf3a_rest_height = case_when(
+      crf3a_rest_height < 100 ~ NA_real_,
+      crf3a_rest_height > 250 ~ NA_real_,
+      TRUE ~ crf3a_rest_height
     )
+  ) %>% 
+  ff_relabel_df(phosp)
 
 
 # PFTs ----------------------------------------------------------------------------------------
@@ -291,9 +351,10 @@ study_id_before_end_nov = phosp %>%
 
 
 # Temp out for testing -----------------------------------------------
-# saveRDS(phosp, "phosp.rds")
-# saveRDS(phosp_hosp, "phosp_hosp.rds")
-# saveRDS(phosp_6w, "phosp_6w.rds")
-# saveRDS(phosp_3m, "phosp_3m.rds")
-# save(study_id_before_end_nov, file = "helpers.rda")
+saveRDS(phosp, "phosp.rds")
+saveRDS(data, "data.rds")
+saveRDS(phosp_hosp, "phosp_hosp.rds")
+saveRDS(phosp_6w, "phosp_6w.rds")
+saveRDS(phosp_3m, "phosp_3m.rds")
+save(study_id_before_end_nov, file = "helpers.rda")
 
