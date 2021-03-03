@@ -3,14 +3,14 @@ title: "PHOSP-COVID report"
 author: "PHOSP-COVID collaborative"
 date: "10/02/2021"
 output:
-  word_document:
-    toc: yes
-    toc_depth: '3'
   html_document:
     code_folding: hide
     toc: yes
     toc_depth: 3
     toc_float: yes
+  word_document:
+    toc: yes
+    toc_depth: '3'
 ---
 
 ```{r setup, include=FALSE}
@@ -56,35 +56,39 @@ explanatory = c("age_admission", "crf1a_sex",
                 
                 "crf1b_income", 
                 "crf1b_edu",
+                "imd_quintile",
                 "crf1a_pregnant_yn",
                 "crf1a_post_partum_yn",
                 
                 # Comorbidities
-                
+                "no_comorbid",
                 "crf1a_com_card", "crf1a_com_neupsy",
                 "crf1a_com_res", "crf1a_com_rheu",
                 "crf1a_com_gast", "crf1a_com_mer", 
-                "crf1a_com_mh", "crf1a_com_id", 
-                
-                # Symptoms
-                'crf1a_fever_history', 'crf1a_cough', 'crf1a_cough_sputum', 'crf1a_cough_blood', 
-                'crf1a_sore_throat', 'crf1a_runny_nose', 'crf1a_ear_pain', 'crf1a_wheezing', 
-                'crf1a_chest_pain', 'crf1a_muscle_aches', 'crf1a_join_pain', 'crf1a_fatigue', 
-                'crf1a_shortness_breath', 'crf1a_loss_taste', 'crf1a_loss_smell', 'crf1a_chest_indrawing', 
-                'crf1a_headache', 'crf1a_confusion', 'crf1a_seizures', 'crf1a_pain', 'crf1a_nausea', 
-                'crf1a_diarrhoea', 'crf1a_conjunctivitis', 'crf1a_skin_rash', 'crf1a_skin_ulcers', 
-                'crf1a_lymphadenopathy', 'crf1a_bleeding'
-                )
+                "crf1a_com_mh", "crf1a_com_diab",
+                "crf1a_com_id")
+
+explanatory_presenting_symptoms = c(
+  'crf1a_fever_history', 'crf1a_cough', 'crf1a_cough_sputum', 'crf1a_cough_blood', 
+  'crf1a_sore_throat', 'crf1a_runny_nose', 'crf1a_ear_pain', 'crf1a_wheezing', 
+  'crf1a_chest_pain', 'crf1a_muscle_aches', 'crf1a_join_pain', 'crf1a_fatigue', 
+  'crf1a_shortness_breath', 'crf1a_loss_taste', 'crf1a_loss_smell', 'crf1a_chest_indrawing', 
+  'crf1a_headache', 'crf1a_confusion', 'crf1a_seizures', 'crf1a_pain', 'crf1a_nausea', 
+  'crf1a_diarrhoea', 'crf1a_conjunctivitis', 'crf1a_skin_rash', 'crf1a_skin_ulcers', 
+  'crf1a_lymphadenopathy', 'crf1a_bleeding'
+)
 
 explanatory_symptoms = c("psq_scale_blness_pre", "psq_scale_fatigue_pre", "psq_scale_cough_pre", 
-                "psq_scale_pain_pre", "psq_scale_sleep_pre", 
-                
-                "mrcds_blness_exer_pre", "mrcds_short_level_pre",
-                "mrcds_walk_slower_pre", "mrcds_after_walk_pre", "mrcds_leave_house_pre"
+                         "psq_scale_pain_pre", "psq_scale_sleep_pre", 
+                         
+                         "mrcds_blness_exer_pre", "mrcds_short_level_pre",
+                         "mrcds_walk_slower_pre", "mrcds_after_walk_pre", "mrcds_leave_house_pre"
 )  
 
+
+
 explanatory_duration = c("crf1a_symptom_duration", 
-                "crf1a_admission_duration")
+                         "crf1a_admission_duration")
 
 explanatory_complications = c("crf1a_add_diag_pemt", "crf1a_add_diag_myoc",
                               "crf1a_add_diag_cmp", "crf1a_add_diag"
@@ -93,12 +97,12 @@ explanatory_complications = c("crf1a_add_diag_pemt", "crf1a_add_diag_myoc",
 explanatory_treatment = c("crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
 
 explanatory_trials = c("crf1a_studies___2", "crf1a_studies___3", "crf1a_studies___4", 
-                          "crf1a_studies___5", "crf1a_studies___6", "crf1a_studies___7", 
-                          "crf1a_studies___8", "crf1a_studies___9", "crf1a_studies___10", 
-                          "crf1a_studies___11", "crf1a_studies___12", "crf1a_studies___13", 
-                          "crf1a_studies___14", "crf1a_studies___15", "crf1a_studies___16", 
-                          "crf1a_studies___17", "crf1a_studies___18", "crf1a_studies___19",
-                          "crf1a_studies___20", "crf1a_studies___21")
+                       "crf1a_studies___5", "crf1a_studies___6", "crf1a_studies___7", 
+                       "crf1a_studies___8", "crf1a_studies___9", "crf1a_studies___10", 
+                       "crf1a_studies___11", "crf1a_studies___12", "crf1a_studies___13", 
+                       "crf1a_studies___14", "crf1a_studies___15", "crf1a_studies___16", 
+                       "crf1a_studies___17", "crf1a_studies___18", "crf1a_studies___19",
+                       "crf1a_studies___20", "crf1a_studies___21")
 
 ```
 
@@ -202,9 +206,9 @@ phosp_hosp %>%
 ```{r fig.height=12, fig.width=8}
 phosp_hosp %>% 
   select(explanatory, 
-                 explanatory_duration, 
-                 explanatory_complications,
-                 explanatory_treatment) %>% 
+         explanatory_duration, 
+         explanatory_complications,
+         explanatory_treatment) %>% 
   remove_labels() %>% 
   missing_plot()
 ```
@@ -212,7 +216,7 @@ phosp_hosp %>%
 
 ```{r fig.height=2, fig.width=8}
 phosp_3m %>% 
-    select(explanatory_symptoms) %>% 
+  select(explanatory_symptoms) %>% 
   remove_labels() %>% 
   missing_plot()
 ```
@@ -280,7 +284,7 @@ phosp_hosp %>%
 phosp_3m %>% 
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
   summary_factorlist(dependent,  explanatory_symptoms, 
-                     na_include = TRUE, na_include_dependent = TRUE,
+                     na_include = TRUE, na_include_dependent = TRUE, cont = "median",
                      add_col_totals = TRUE, add_row_totals = TRUE,
                      total_col = TRUE) %>% 
   mytable()
@@ -353,8 +357,9 @@ phosp_3m %>%
 ```{r}
 phosp_3m %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
-  summary_factorlist(dependent,  explanatory = c( "eq5d5l_summary_pre",
-                                                  "eq5d5l_q1_pre", "eq5d5l_q2_pre", "eq5d5l_q3_pre", 
+  summary_factorlist(dependent,  explanatory = c("eq5d5l_total_pre",
+                                                 "eq5d5l_summary_pre",
+                                                 "eq5d5l_q1_pre", "eq5d5l_q2_pre", "eq5d5l_q3_pre", 
                                                  "eq5d5l_q4_pre", "eq5d5l_q5_pre"),
                      na_include = TRUE, na_include_dependent = TRUE, 
                      add_col_totals = TRUE, add_row_totals = TRUE,
@@ -367,8 +372,9 @@ phosp_3m %>%
 ```{r}
 phosp_3m %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
-  summary_factorlist(dependent,  explanatory = c( "eq5d5l_summary",
-                                                  "eq5d5l_q1", "eq5d5l_q2", "eq5d5l_q3", 
+  summary_factorlist(dependent,  explanatory = c("eq5d5l_total",
+                                                 "eq5d5l_summary",
+                                                 "eq5d5l_q1", "eq5d5l_q2", "eq5d5l_q3", 
                                                  "eq5d5l_q4", "eq5d5l_q5"),
                      na_include = TRUE, na_include_dependent = TRUE,
                      add_col_totals = TRUE, add_row_totals = TRUE,
@@ -579,69 +585,85 @@ phosp_hosp %>%
   mytable()
 ```
 
+
+## Presenting symptoms 
+
+```{r}
+explanatory_presenting_symptoms = c(
+  'crf1a_fever_history', 'crf1a_cough', 'crf1a_cough_sputum', 'crf1a_cough_blood', 
+  'crf1a_sore_throat', 'crf1a_runny_nose', 'crf1a_ear_pain', 'crf1a_wheezing', 
+  'crf1a_chest_pain', 'crf1a_muscle_aches', 'crf1a_join_pain', 'crf1a_fatigue', 
+  'crf1a_shortness_breath', 'crf1a_loss_taste', 'crf1a_loss_smell', 'crf1a_chest_indrawing', 
+  'crf1a_headache', 'crf1a_confusion', 'crf1a_seizures', 'crf1a_pain', 'crf1a_nausea', 
+  'crf1a_diarrhoea', 'crf1a_conjunctivitis', 'crf1a_skin_rash', 'crf1a_skin_ulcers', 
+  'crf1a_lymphadenopathy', 'crf1a_bleeding'
+)
+
+dependent = "crf1a_resp_support_8levels"
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory_presenting_symptoms, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+## Details comorbidities
+
 ```{r}
 # For full comorbs supplement
-explanatory = c("age_admission", "crf1a_sex", 
-                "crf1b_eth_5levels", 
-                "crf3a_bmi",
-                
-                "crf1b_income", 
-                "crf1b_edu",
-                "crf1a_pregnant_yn",
-                "crf1a_post_partum_yn",
-                
-                # Comorbidities
-                
-                "crf1a_com_card", "crf1a_com_neupsy",
-                "crf1a_com_res", "crf1a_com_rheu",
-                "crf1a_com_gast", "crf1a_com_mer", 
-                "crf1a_com_mh", "crf1a_com_id", 
-                
-                
-                
-                # Comorbidities
-                'no_comorbid',
-                'crf1a_com_card_mi', 'crf1a_com_card_ihd', 
-                'crf1a_com_card_af', 'crf1a_com_card_ht', 
-                'crf1a_com_card_chf', 'crf1a_com_card_chd', 
-                'crf1a_com_card_vhd', 'crf1a_com_card_pid', 
-                'crf1a_com_card_pvd', 'crf1a_com_card_hcd', 
-                'crf1a_com_card_catia', 
-                #'crf1a_com_card_other_yn', 'crf1a_com_card_other', 
-                #''crf1a_com_neupsy_dem', 
-                #'crf1a_com_neupsy_other_yn', 
-                'crf1a_com_neupsy_da', 
-                'crf1a_com_neupsy_chron', 'crf1a_com_neupsy_pam', 
-                'crf1a_com_neupsy_ptm', 
-                #'crf1a_com_neupsy_other', 
-                'crf1a_com_res_copd', 'crf1a_com_res_ast', 
-                'crf1a_com_res_ild_yn', 'crf1a_com_res_bron', 
-                'crf1a_com_res_osa', 'crf1a_com_res_ohs', 
-                'crf1a_com_res_pe', #'crf1a_com_res_other_yn', 
-                #'crf1a_com_res_ild', 'crf1a_com_res_other', 
-                'crf1a_com_rheu_ctd', 'crf1a_com_rheu_ra', 
-                'crf1a_com_rheu_ost', 
-                #'crf1a_com_rheu_other_yn', 'crf1a_com_rheu_other', 
-                'crf1a_com_gast_pud', 
-                'crf1a_com_gast_ld', 'crf1a_com_gast_gord', 
-                'crf1a_com_gast_ibd', 'crf1a_com_gast_ibs', 
-                #'crf1a_com_gast_other_yn', 'crf1a_com_gast_other', 
-                'crf1a_com_mer_diab', 'crf1a_com_mer_diab_com', 
-                'crf1a_com_mer_hypot', 'crf1a_com_mer_hypert', 
-                'crf1a_com_mer_ckd_yn', 
-                #'crf1a_com_mer_other_yn', 
-                'crf1a_com_mer_ckd_stage', 
-                #'crf1a_com_mer_other', 
-                'crf1a_com_mh_stm', #'crf1a_com_mh_stm_detail', 
-                'crf1a_com_mh_leuk_yn', 'crf1a_com_mh_lymp_yn', 
-                #'crf1a_com_mh_other_yn', 
-                #''crf1a_com_mh_leuk_detail', 
-                #'crf1a_com_mh_lymp', 
-                #'crf1a_com_mh_other', 
-                'crf1a_com_id_aids', 'crf1a_com_id_hiv', 
-                'crf1a_com_id_cvh', 'crf1a_com_id_mt'
-                #'crf1a_com_id_other_yn'
-)
+explanatory = c(# Comorbidities
+  'no_comorbid',
+  'crf1a_com_card_mi', 'crf1a_com_card_ihd', 
+  'crf1a_com_card_af', 'crf1a_com_card_ht', 
+  'crf1a_com_card_chf', 'crf1a_com_card_chd', 
+  'crf1a_com_card_vhd', 'crf1a_com_card_pid', 
+  'crf1a_com_card_pvd', 'crf1a_com_card_hcd', 
+  'crf1a_com_card_catia', 
+  #'crf1a_com_card_other_yn', 'crf1a_com_card_other', 
+  #''crf1a_com_neupsy_dem', 
+  #'crf1a_com_neupsy_other_yn', 
+  'crf1a_com_neupsy_da', 
+  'crf1a_com_neupsy_chron', 'crf1a_com_neupsy_pam', 
+  'crf1a_com_neupsy_ptm', 
+  #'crf1a_com_neupsy_other', 
+  'crf1a_com_res_copd', 'crf1a_com_res_ast', 
+  'crf1a_com_res_ild_yn', 'crf1a_com_res_bron', 
+  'crf1a_com_res_osa', 'crf1a_com_res_ohs', 
+  'crf1a_com_res_pe', #'crf1a_com_res_other_yn', 
+  #'crf1a_com_res_ild', 'crf1a_com_res_other', 
+  'crf1a_com_rheu_ctd', 'crf1a_com_rheu_ra', 
+  'crf1a_com_rheu_ost', 
+  #'crf1a_com_rheu_other_yn', 'crf1a_com_rheu_other', 
+  'crf1a_com_gast_pud', 
+  'crf1a_com_gast_ld', 'crf1a_com_gast_gord', 
+  'crf1a_com_gast_ibd', 'crf1a_com_gast_ibs', 
+  #'crf1a_com_gast_other_yn', 'crf1a_com_gast_other', 
+  'crf1a_com_mer_diab', 'crf1a_com_mer_diab_com', 
+  'crf1a_com_mer_hypot', 'crf1a_com_mer_hypert', 
+  'crf1a_com_mer_ckd_yn', 
+  #'crf1a_com_mer_other_yn', 
+  'crf1a_com_mer_ckd_stage', 
+  #'crf1a_com_mer_other', 
+  'crf1a_com_mh_stm', #'crf1a_com_mh_stm_detail', 
+  'crf1a_com_mh_leuk_yn', 'crf1a_com_mh_lymp_yn', 
+  #'crf1a_com_mh_other_yn', 
+  #''crf1a_com_mh_leuk_detail', 
+  #'crf1a_com_mh_lymp', 
+  #'crf1a_com_mh_other', 
+  'crf1a_com_id_aids', 'crf1a_com_id_hiv', 
+  'crf1a_com_id_cvh', 'crf1a_com_id_mt'
+  #'crf1a_com_id_other_yn'
+  )
+
+dependent = "crf1a_resp_support_8levels"
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
 ```
 
 
