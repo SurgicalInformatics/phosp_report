@@ -1,7 +1,6 @@
 ---
 title: "PHOSP-COVID report"
 author: "PHOSP-COVID collaborative"
-date: "10/02/2021"
 output:
   html_document:
     code_folding: hide
@@ -352,6 +351,68 @@ phosp_3m %>%
                      total_col = TRUE) %>% 
   mytable()
 ```
+
+### Table 3. Differences. NEW 04/03/2021
+
+All delta variables are now minus pre-covid. 
+
+For EQ5D "how good or bad is your health: positive number is improvement, negative is worse. 
+
+For all "delta" variables below: postive number is worse health. 
+
+#### By resp support 
+
+```{r}
+explanatory_differences = phosp %>% 
+  select(matches("eq5d5l_.*_delta"),
+          matches("patient_sq_l_t_.*_delta"),
+         matches("psq_scale_.*_delta")
+  ) %>% 
+  names()
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory_differences,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     include_row_missing_col = FALSE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+#### By age
+```{r}
+phosp_3m %>%
+  summary_factorlist("age_admission_factor",  explanatory_differences,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     include_row_missing_col = FALSE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+#### By comorbidities
+```{r}
+phosp_3m %>%
+  summary_factorlist("no_comorbid_3levels",  explanatory_differences,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     include_row_missing_col = FALSE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+#### By IMD
+```{r}
+phosp_3m %>%
+  summary_factorlist("imd_quintile",  explanatory_differences,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     include_row_missing_col = FALSE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
 
 ### Table 3. EQ5D pre.
 ```{r}
