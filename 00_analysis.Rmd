@@ -32,16 +32,19 @@ source("01_data_pull.R")
 lastrun = Sys.time()
 source("02_functions.R")
 source("03_prep.R")
+source("04_clustering.R")
 ```
 
 ```{r eval=FALSE, include=FALSE}
 # For exploration 
-phosp = readRDS("phosp.rds")
-phosp_hosp = readRDS("phosp_hosp.rds")
-phosp_3m = readRDS("phosp_3m.rds")
-load("helpers.rda")
+library(readr) # loaded with tidyverse anyway
+datadir = "/home/common/phosp/raw/"
+timestamp = "2021-03-05_0400"
+phosp   = read_rds(paste0(datadir, "phosp_", timestamp, ".rds"))
 lastrun = Sys.time()
 source("02_functions.R")
+source("03_prep.R")
+source("04_clustering.R")
 ```
 
 Dynamic content updated: `r lastrun`. 
@@ -583,7 +586,7 @@ phosp_3m %>%
   mytable()
 ```
 
-### Table 4
+### Table 4. PFTs. 
 
 PFTs need a bit of looking at. Multiple sets of PFTs can be present at each visit. 
 
@@ -629,6 +632,19 @@ phosp_3m_pft %>%
   ggplot_lancet(aes(value)) + 
   geom_histogram(fill = "lightblue")  + 
   facet_wrap(~ key, ncol = 3, scales = "free")
+```
+
+### Table 5. Clustering
+```{r}
+dependent = "cluster"
+phosp_3m %>% 
+  select(study_id, cluster) %>% 
+  left_join(phosp_hosp %>% select(study_id, explanatory)) %>% 
+  summary_factorlist(dependent,  explanatory, 
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
 ```
 
 
