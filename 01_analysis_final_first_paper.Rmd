@@ -1,0 +1,1304 @@
+---
+title: "PHOSP-COVID report"
+author: "PHOSP-COVID collaborative"
+output:
+  word_document:
+    toc: yes
+    toc_depth: '3'
+  html_document:
+    code_folding: hide
+    toc: yes
+    toc_depth: 3
+    toc_float: yes
+---
+
+```{r setup, include=FALSE}
+if (knitr::is_html_output()){
+  knitr::opts_chunk$set(echo = TRUE,
+                        warning = FALSE,
+                        message = FALSE)
+} else {
+  knitr::opts_chunk$set(echo = FALSE,
+                        warning = FALSE,
+                        message = FALSE)
+}
+
+library(finalfit)
+library(knitr)
+library(tidyverse)
+library(rmarkdown)
+
+summary_factorlist <- purrr::partial(finalfit::summary_factorlist, na_to_prop = FALSE)
+```
+
+```{r eval=FALSE, include=FALSE}
+# Pull and prep
+source("01_data_pull.R")
+lastrun = Sys.time()
+source("02_functions.R")
+source("03_prep.R")
+source("04_clustering.R")
+```
+
+```{r}
+# For exploration 
+library(readr) # loaded with tidyverse anyway
+datadir = "/home/common/phosp/raw/"
+timestamp = "2021-03-12_1624"
+phosp   = read_rds(paste0(datadir, "phosp_", timestamp, ".rds"))
+lastrun = Sys.time()
+source("02_functions.R")
+source("03_prep.R")
+# source("04_clustering.R")
+source("05_kco.R")
+```
+
+### Tier 2 cohort before 30 Nov 2020 with < 240 days follow-up
+
+```{r}
+# Filter at 240 days follow up. 
+study_id_240 = phosp %>% 
+  group_by(study_id) %>% 
+  fill(crf1a_date_dis, crf3a_visit_date, .direction = "downup") %>% 
+  select(study_id, crf1a_date_dis, crf3a_visit_date) %>% 
+  distinct(study_id, .keep_all = TRUE) %>% 
+  mutate(discharge2review = (crf3a_visit_date - crf1a_date_dis) %>% as.numeric()) %>% 
+  filter(discharge2review <= 240 | is.na(discharge2review)) %>% 
+  pull(study_id)
+
+phosp_hosp %>% 
+  filter(tier == 2) %>% 
+  filter(study_id %in% study_id_before_end_nov) %>% 
+  filter(study_id %in% study_id_240) %>% 
+  count(crf1a_resp_support_4levels) %>% 
+  mytable()
+```
+
+All analyses below are for tier 2 patients discharged on or before 30th Nov 2020 who have respiratory support data. 
+Added: remove those with missing sex/gender. 
+
+```{r}
+keep = phosp_hosp %>% 
+  filter(tier == 2) %>% 
+  filter(study_id %in% study_id_before_end_nov) %>%
+  filter(study_id %in% study_id_240) %>% 
+  drop_na(crf1a_resp_support_4levels) %>% 
+  filter(!is.na(crf1a_sex)) %>% 
+  filter(study_id != "28-31") %>% # Temp remove as no 3 m data coming through
+  pull(study_id)
+
+phosp_hosp = phosp_hosp %>% 
+  filter(study_id %in% keep)
+
+phosp_3m = phosp_3m %>% 
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  filter(study_id %in% keep)
+
+phosp = phosp %>% 
+  filter(study_id %in% keep)
+
+phosp_wt = phosp_wt %>% 
+  filter(study_id %in% keep)
+```
+
+```{r}
+# Any joins can be temporarily done here, then moved to cleaning. 
+phosp_hosp = phosp_hosp %>% 
+  left_join(phosp %>% select(study_id, crf3a_bmi) %>% drop_na() %>% distinct(study_id, .keep_all = TRUE))
+
+# phosp_hosp = phosp_hosp %>%
+#   left_join(phosp_3m %>% select(study_id, eq5d5l_summary_delta, psq_recovered))
+
+```
+
+```{r}
+# Temp variable changes / collapses
+
+## Pull psq_recovered from 6 week data if missing at 3 months
+phosp_hosp = phosp_hosp %>% 
+  left_join(phosp_3m %>% select(study_id, psq_recovered, eq5d5l_summary_delta, discharge_to_3m_review)) %>%
+  left_join(phosp_6w %>% select(study_id, 
+                                psq_recovered_6w = psq_recovered,
+                                eq5d5l_summary_delta_6w = eq5d5l_summary_delta)) %>% 
+  mutate(
+    psq_recovered = case_when(
+      is.na(psq_recovered) & !is.na(psq_recovered_6w) ~ psq_recovered_6w,
+      TRUE ~ psq_recovered
+    ) %>% fct_recode("No" = "Not sure") %>% 
+      fct_relevel("No"),
+    
+    eq5d5l_summary_delta = case_when(
+      is.na(eq5d5l_summary_delta) & !is.na(eq5d5l_summary_delta_6w) ~ eq5d5l_summary_delta_6w,
+      TRUE ~ eq5d5l_summary_delta)
+  ) %>% 
+  ff_relabel_df(phosp_hosp)
+```
+
+```{r}
+# Smoking
+phosp_smoking = phosp_3m %>% 
+  select(study_id, patient_sq_n) %>% 
+  left_join(phosp_6w %>% select(study_id, patient_sq_n_6w = patient_sq_n)) %>% 
+  mutate(patient_sq_n= case_when(
+    is.na(patient_sq_n) & !is.na(patient_sq_n_6w) ~ patient_sq_n_6w,
+    TRUE ~ patient_sq_n
+  ) %>% 
+    ff_label("Smoking")
+  ) %>% 
+  select(study_id, patient_sq_n)
+
+phosp_hosp = phosp_hosp %>% 
+  left_join(phosp_smoking) %>% 
+    mutate(patient_sq_n = ff_label(patient_sq_n, "Smoking"))
+```
+
+
+## Text numbers
+
+```{r}
+# Discharge to review date
+t = phosp %>% 
+  group_by(study_id) %>% 
+  fill(crf1a_date_dis, crf2a_date_discharged, crf3a_visit_date, .direction = "downup") %>% 
+  select(study_id, crf1a_date_dis, crf2a_date_discharged, crf3a_visit_date) %>% 
+  distinct(study_id, .keep_all = TRUE) %>% 
+  mutate(discharge2review = (crf3a_visit_date - crf1a_date_dis) %>% as.numeric()) %>% 
+  ungroup() %>% 
+  ff_glimpse() 
+
+t[[1]] %>% 
+  mytable()
+```
+
+
+## Table 1: Comparison of participant demographics, pre-existing co-morbidities, and admission characteristics stratified by severity of acute illness.
+
+```{r}
+explanatory = c("swab_pcr_result", 
+                "discharge_to_3m_review",
+                "age_admission", 
+                "crf1a_sex", 
+                "crf1b_eth_5levels", 
+                "imd_quintile",
+                "crf3a_bmi",
+                "patient_sq_n",
+                
+                # Comorbidities
+                "no_comorbid",
+                "no_comorbid_3levels",
+                "crf1a_com_card", "crf1a_com_neupsy",
+                "crf1a_com_res", "crf1a_com_rheu",
+                "crf1a_com_gast", "crf1a_com_mer", 
+                "crf1a_com_mh", "crf1a_com_diab",
+                "crf1a_com_id",
+                
+                "crf1a_admission_duration",
+                
+                "crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
+
+dependent = "crf1a_resp_support_4levels"
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory, 
+                     na_include = TRUE, na_include_dependent = TRUE, cont = "median",
+                     add_col_totals = TRUE, 
+                     total_col = TRUE) %>% 
+  ff_remove_ref() %>% 
+  ff_column_totals(phosp_hosp, dependent) %>% 
+  ff_row_totals(phosp_hosp, dependent, explanatory, missing_column = FALSE) %>% 
+  mytable()
+```
+
+## Table 2: Proportion unchanged, worse or better in terms of overall visual analogue score and EQ5D prior to hospitalisation and at follow-up stratified by severity of acute illness.
+
+Variable labels can be fixed here. 
+
+
+```{r}
+explanatory_differences = c("psq_recovered",
+                            "eq5d5l_summary_pre",
+                            "eq5d5l_summary",
+                            # Pull delta_change names
+                            phosp %>% 
+                              select(matches("eq5d5l_q.*_delta_change")
+                              ) %>% 
+                              names(),
+                            "eq5d5l_utility_index_pre",
+                            "eq5d5l_utility_index",
+                            "eq5d5l_utility_index_delta",
+                            
+                            "patient_sq_l_t_disability",
+                            "patient_sq_l_t__new_disability")
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  summary_factorlist(dependent,  explanatory_differences,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, digits = c(2, 2, 3, 1),
+                     total_col = TRUE, p = TRUE) %>% 
+  mytable()
+```
+
+## Table 3: Health-related quality of life, physiological and functional status at follow-up stratified for severity of acute illness. 
+
+```{r}
+phosp_wt_table = phosp_wt %>% 
+  filter(wt_type == "Incremental shuttle walk test (ISWT) Modified 15 level") %>% 
+  filter(wt_visit == "3 months") %>% 
+  drop_na(wt_distance) %>% 
+  mutate(wt_iswt_predicted_perc = replace_na(wt_iswt_predicted_perc, 0)) %>% # to deal with max returning inf
+  group_by(study_id) %>%  # More than one test per patient
+  mutate(value_max = if_else(row_number() == which.max(wt_iswt_predicted_perc), TRUE, FALSE)) %>% 
+  filter(value_max) %>% 
+  select(study_id, wt_distance, wt_iswt_predicted_perc) %>% 
+  as.data.frame() %>% 
+  ff_relabel_df(phosp_wt)
+
+phosp_pft_table = phosp %>% 
+  filter(redcap_event_name== "3 Months (1st Research Visit)") %>% 
+  filter(redcap_repeat_instrument == "Pulmonary Functional Tests") %>% 
+  filter(pft_spm_done == "Yes") %>% 
+  select(study_id, starts_with("pft_")) %>% 
+  drop_na(pft_fev1) %>% 
+  group_by(study_id) %>% 
+  mutate(value_max = if_else(row_number() == which.max(pft_fev1), TRUE, FALSE)) %>% 
+  filter(value_max) %>% 
+  select("pft_fev1_perc_pred",
+         "pft_fev1",
+         "pft_fev1_perc_pred_80",
+         "pft_fvc_perc_pred",
+         "pft_fvc",
+         "pft_fvc_perc_pred_80",
+         "pft_fev1_fvc", 
+         "pft_fev1_fvc_70") %>% 
+  as.data.frame() %>% 
+  ff_relabel_df(phosp)
+
+# Do kco and tlco extraction and percentage normal separately. 
+phosp_kco_table = phosp %>% 
+  filter(redcap_event_name== "3 Months (1st Research Visit)") %>% 
+  filter(redcap_repeat_instrument == "Pulmonary Functional Tests") %>% 
+  filter(pft_spm_done == "Yes") %>% 
+  select(study_id, pft_tlco, pft_kco) %>% 
+  drop_na(pft_kco) %>% 
+  left_join(phosp_kco %>% select(study_id, tlcoM_SI_pred, kcoM_SI_pred)) %>% 
+  mutate(
+    pft_tlco_pred = (100 * pft_tlco / tlcoM_SI_pred) %>% ff_label("TLCO % predicted"),
+    pft_kco_pred = (100 * pft_kco / kcoM_SI_pred) %>% ff_label("KCO % predicted"),
+    
+    pft_tlco_pred_80 = case_when(
+      pft_tlco_pred < 80 ~ "Yes",
+      pft_tlco_pred >= 80 ~ "No",
+    ) %>% 
+      ff_label("TLCO predicted <80%"),
+      
+    pft_kco_pred_80 = case_when(
+      pft_kco_pred < 80 ~ "Yes",
+      pft_kco_pred >= 80 ~ "No",
+    ) %>% 
+      ff_label("KCO predicted <80%"),
+    
+  ) %>% 
+  ff_relabel_df(phosp)
+
+phosp_pft_table = phosp_pft_table %>% 
+  left_join(phosp_kco_table)
+```
+
+
+```{r}
+phosp_bloods_table = phosp %>% 
+  filter(redcap_event_name== "3 Months (1st Research Visit)") %>% 
+  filter(redcap_repeat_instrument == "Laboratory Results Collection Log - Routine blood tests") %>% 
+  group_by(study_id) %>% 
+  summarise(
+    # This needs to summarise over multiple blood tests per visit. 
+    # Take max values and yes over no. 
+    # Convoluted by necessity. 
+    # note case_when doesn't currently work with any. Known issue Feb 21
+    bnp_result = ifelse(all(is.na(bnp_result)), NA, max(bnp_result, na.rm = TRUE)),
+    pnbnp_result = ifelse(all(is.na(pnbnp_result)), NA, max(pnbnp_result, na.rm = TRUE)),
+    bnp_summary = ifelse(any(bnp_summary == "Yes", na.rm = TRUE), "Yes", 
+                          ifelse(any(bnp_summary == "No", na.rm = TRUE), "No", 
+                                 NA)),
+    
+    hba1c_result = ifelse(all(is.na(hba1c_result)), NA, max(hba1c_result, na.rm = TRUE)),
+    hba1c_summary = ifelse(any(hba1c_summary  == "Yes", na.rm = TRUE), "Yes", 
+                          ifelse(any(hba1c_summary  == "No", na.rm = TRUE), "No", 
+                                 NA)),
+    
+    egfr_result = ifelse(all(is.na(egfr_result)), NA, max(egfr_result, na.rm = TRUE)),
+    egfr_summary = ifelse(any(egfr_summary == "Yes", na.rm = TRUE), "Yes", 
+                          ifelse(any(egfr_summary == "No", na.rm = TRUE), "No", 
+                                 NA)),
+    
+    ddi_result = ifelse(all(is.na(ddi_result)), NA, max(ddi_result, na.rm = TRUE)),
+    ddi_summary = ifelse(any(ddi_summary == "Yes", na.rm = TRUE), "Yes", 
+                          ifelse(any(ddi_summary == "No", na.rm = TRUE), "No", 
+                                 NA)),
+    
+    crp_result = ifelse(all(is.na(crp_result)), NA, max(crp_result , na.rm = TRUE)),
+    crp_summary = ifelse(any(crp_summary  == "Yes", na.rm = TRUE), "Yes", 
+                          ifelse(any(crp_summary == "No", na.rm = TRUE), "No", 
+                                 NA)),
+  ) %>% 
+  ff_relabel_df(phosp)
+
+explanatory_hrqol = c(
+  "symptom_any",
+  "symptom_count",
+  "gad7_summary_2levels",
+  "phq9_summary_2levels",
+  "pcl5_summary_2levels",
+  "dyspnoea12_summary",
+  #"facit_v4_summary",
+  "facit_item_total",
+  "bpi_severity_summary",
+  "bpi_interference_summary",
+  "sppb_score",
+  "sppb_score_summary",
+  "wt_distance",
+  "wt_iswt_predicted_perc",
+  "rcf_score_summary",
+  "mocal_total_summary",
+  "mocal_total_corrected_summary",  
+  "pft_fev1_perc_pred", 
+  "pft_fev1_perc_pred_80",
+  "pft_fev1_fvc_70",
+  "pft_fvc_perc_pred_80",
+  "pft_tlco",
+  "pft_tlco_pred",
+  "pft_tlco_pred_80",
+  "pft_kco",           
+  "pft_kco_pred",
+  "pft_kco_pred_80",
+  "bnp_summary",
+  "hba1c_summary",
+  "egfr_summary",
+  "ddi_result",
+  "ddi_summary",
+  "crp_summary"
+)
+phosp_3m %>%
+  left_join(phosp_wt_table) %>% 
+  left_join(phosp_pft_table) %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
+  select(dependent, explanatory_hrqol) %T>% 
+  {data_in <<- .} %>% 
+  summary_factorlist(dependent,  explanatory_hrqol,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     total_col = TRUE, cont_nonpara = c(2),
+                     add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
+                     p = TRUE) %>%
+  mytable()
+```
+
+## Table 4: Occupation status prior to hospitalisation and at follow-up stratified by acute illness
+
+```{r}
+explanatory_occupation = c(
+  # "crf1b_healthcare_worker", "crf1b_caring",
+  "social_status_before", #  "social_status_after", 
+  "working_status_change", "working_less", 
+  "no_longer_working", "health_reasons",
+  "employer_reasons", "other_reasons"
+  
+  # "patient_sq_q", "patient_sq_q_today", "patient_sq_q_change",
+  # "patient_sq_p_smoking", "patient_sq_p_drinking",
+  # "patient_sq_p_eating", "patient_sq_p_activity"
+)
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels, crf1b_healthcare_worker, crf1b_caring)) %>% 
+  summary_factorlist(dependent,  explanatory_occupation,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
+                     p = TRUE) %>% 
+  mytable()
+```
+
+
+## Table 5: Characteristics associated with recovery versus persistent symptoms and disability 
+
+```{r}
+dependent = "psq_recovered"
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory, 
+                     na_include = TRUE, na_include_dependent = TRUE, cont = "median",
+                     add_col_totals = TRUE, 
+                     total_col = TRUE) %>% 
+  ff_remove_ref() %>% 
+  ff_column_totals(phosp_hosp, dependent) %>% 
+  dependent_label(phosp_hosp, dependent) %>% 
+  mytable()
+```
+
+```{r}
+## Multiple imputation
+library(mice)
+library(finalfit)
+library(purrr)
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Run mice
+explanatory = c("age_admission", 
+                "crf1a_sex", 
+                "crf1b_eth_5levels", 
+                "imd_quintile",
+                "crf3a_bmi",
+                
+                "crf1a_resp_support_4levels",
+                
+                # Comorbidities - # None of these are imputed as missing considered absent
+                "no_comorbid",
+                "no_comorbid_3levels",
+                "crf1a_com_card", "crf1a_com_neupsy",
+                "crf1a_com_res", "crf1a_com_rheu",
+                "crf1a_com_gast", "crf1a_com_mer", 
+                "crf1a_com_mh", "crf1a_com_diab",
+                "crf1a_com_id",
+                
+                "crf1a_admission_duration",
+                
+                "crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac",
+                "psq_recovered",
+                
+                "redcap_data_access_group")
+
+
+# Choose not to impute missing values
+# for explanatory variable of interest and
+# outcome variable. 
+# But include in algorithm for imputation.
+predM = phosp_hosp %>% 
+  select(explanatory) %>% 
+  missing_predictorMatrix(
+    drop_from_imputer = "redcap_data_access_group",
+    drop_from_imputed = c("psq_recovered"))
+
+phosp_hosp_imputed = phosp_hosp %>% 
+  select(explanatory) %>% 
+  mice(m = 10, maxit = 10, predictorMatrix = predM)
+
+plot(phosp_hosp_imputed)
+summary(phosp_hosp_imputed)
+
+saveRDS(phosp_hosp_imputed, file = "phosp_hosp_imputed_160321.rds")
+```
+
+```{r}
+# Load mice sets
+phosp_hosp_imputed = readRDS("phosp_hosp_imputed_160321.rds")
+```
+
+
+## Table 6: Multivariable logistic regression
+
+```{r}
+## Decide about metrcs later
+dependent = "psq_recovered"
+explanatory = c("age_admission_factor", "crf1a_sex", "crf1b_eth_5levels", "imd_quintile", "no_comorbid_3levels",
+                "crf1a_resp_support_4levels", "crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
+explanatory_multi = c("age_admission", "crf1a_sex", "crf1b_eth_5levels", "imd_quintile", "no_comorbid_3levels")
+
+fit_cc = phosp_hosp %>% 
+  finalfit(dependent, explanatory, keep_fit_id = TRUE)
+
+# fit_uni_imputed = phosp_hosp_imputed %>% 
+#   mice::complete("all") %>% 
+#   purrr::map(~ glmuni(.x, dependent, explanatory)) %>% 
+#   purrr::transpose() %>% 
+#   purrr::map(as.mira) %>% 
+#   purrr::map(pool) %>% 
+#   purrr::map_df(~ finalfit:::summary_mipo(.x, conf.int = TRUE, exponentiate = TRUE) %>% 
+#                dplyr::select(explanatory_name = term, estimate, `2.5 %`, `97.5 %`, p.value) %>% 
+#                condense_fit(estimate_name = "OR (univariable imputed)") %>% 
+#                remove_intercept()
+#   ) 
+             
+fit_multi_imputed_pool = phosp_hosp_imputed %>% 
+  mice::complete("all") %>%
+  # Probably temp. Add age_admission_factor to imputed datasets
+  purrr::map(~ mutate(., 
+               age_admission_factor = case_when(
+                 age_admission < 30 ~ "<30",
+                 age_admission < 40 ~ "30-39",
+                 age_admission < 50 ~ "40-49",
+                 age_admission < 60 ~ "50-59",
+                 age_admission < 70 ~ "60-69",
+                 age_admission < 80 ~ "70-79",
+                 is.na(age_admission) ~ NA_character_,
+                 TRUE ~ "80+"
+               ) %>% 
+                 fct_relevel("50-59")
+  )) %>% 
+  purrr::map(~ glmmulti(.x, dependent, explanatory)) %>%
+  as.mira() %>% 
+  pool()
+
+
+# Multilevel
+library(broom.mixed)
+fit_mixed_imputed_pool = phosp_hosp_imputed %>% 
+  mice::complete("all") %>%
+  # Probably temp. Add age_admission_factor to imputed datasets
+  purrr::map(~ mutate(., 
+               age_admission_factor = case_when(
+                 age_admission < 30 ~ "<30",
+                 age_admission < 40 ~ "30-39",
+                 age_admission < 50 ~ "40-49",
+                 age_admission < 60 ~ "50-59",
+                 age_admission < 70 ~ "60-69",
+                 age_admission < 80 ~ "70-79",
+                 is.na(age_admission) ~ NA_character_,
+                 TRUE ~ "80+"
+               ) %>% 
+                 fct_relevel("50-59")
+  )) %>% 
+  purrr::map(~ glmmixed(.x, dependent, explanatory, random_effect = "redcap_data_access_group")) %>%
+  as.mira() %>% 
+  pool()
+
+fit_multi_imputed = fit_multi_imputed_pool%>% 
+  fit2df(estimate_name = "OR (multivariable imputation)", exp = TRUE)
+
+fit_mixed_imputed = fit_mixed_imputed_pool%>% 
+  fit2df(estimate_name = "OR (multilevel imputation)", exp = TRUE)
+  
+fit_cc %>% 
+  # ff_merge(fit_uni_imputed) %>% 
+  ff_merge(fit_multi_imputed) %>% 
+  ff_merge(fit_mixed_imputed, last_merge = TRUE) %>% 
+  # dplyr::relocate(1, 2, 3, 4, 5, 7, 6, 8) %>% 
+  mytable()
+```
+
+
+## Figure: Multivariable logistic regression (multiple imputation)
+
+```{r fig.height=7, fig.width=12}
+dependent = "psq_recovered"
+explanatory = c("age_admission_factor", "crf1a_sex", "crf1b_eth_5levels", "imd_quintile", "no_comorbid_3levels",
+                "crf1a_resp_support_4levels", "crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
+
+fit = phosp_hosp %>%
+  or_plot(dependent, explanatory, column_space = c(-0.5, 0.15, 0.5), table_text_size = 4, 
+          glmfit = fit_mixed_imputed_pool,
+          dependent_label = "Recovered",
+          breaks = c(0.2, 0.5, 1, 2, 5, 10, 30), )
+```
+
+## Table 8: Recovered vs EQ5D
+
+```{r}
+explanatory_differences = c(
+                            "eq5d5l_summary_pre",
+                            "eq5d5l_summary",
+                            # Pull delta_change names
+                            phosp %>% 
+                              select(matches("eq5d5l_q.*_delta_change")
+                              ) %>% 
+                              names(),
+                            "eq5d5l_utility_index_pre",
+                            "eq5d5l_utility_index",
+                            "eq5d5l_utility_index_delta",
+                            
+                            "patient_sq_l_t_disability",
+                            "patient_sq_l_t__new_disability"
+                            )
+
+
+dependent = "psq_recovered"
+phosp_3m %>%
+  select(-psq_recovered) %>% 
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels, psq_recovered)) %>% 
+  summary_factorlist(dependent,  explanatory_differences,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, 
+                     total_col = TRUE, p = TRUE) %>% 
+  mytable()
+```
+
+
+## Table 9: Recovered v HRQOL
+
+```{r}
+dependent = "psq_recovered"
+phosp_3m %>%
+  select(-psq_recovered) %>% 
+  left_join(phosp_wt_table) %>% 
+  left_join(phosp_pft_table) %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels, psq_recovered)) %T>% 
+  {data_in <<- .} %>% 
+  summary_factorlist(dependent,  explanatory_hrqol,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     total_col = TRUE,  cont_nonpara = c(2),
+                     add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
+                     p = TRUE) %>%
+  mytable()
+
+```
+
+## Table 10: Recovered v occupation
+
+```{r}
+phosp_3m %>%
+  select(-psq_recovered) %>% 
+  left_join(phosp_hosp %>% 
+              select(study_id, crf1a_resp_support_4levels, crf1b_healthcare_worker, crf1b_caring, psq_recovered)) %>% 
+  summary_factorlist(dependent,  explanatory_occupation,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
+                     p = TRUE) %>% 
+  mytable()
+```
+
+## Figures
+
+```{r}
+phosp_hosp %>% 
+  select(eq5d5l_summary_delta, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  ggplot_lancet(aes(fct_rev(crf1a_resp_support_4levels), eq5d5l_summary_delta, 
+                    fill = fct_rev(crf1a_resp_support_4levels))) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "ESQ5d VAS change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+```{r}
+phosp_3m %>% 
+  select(crf1a_resp_support_4levels, matches("psq_scale_.*_delta$")) %>%
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  drop_na(value) %>% 
+  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  facet_wrap(~ crf1a_resp_support_4levels) +
+  #scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "WG-SS change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+
+```{r}
+phosp_3m %>% 
+  select(crf1a_resp_support_4levels, matches("patient_sq_l_t_.*delta$")) %>%
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  drop_na(value) %>% 
+  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
+  geom_boxplot() + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  facet_wrap(~ crf1a_resp_support_4levels) +
+  #scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "WG-SS change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+Not much data in some of these:
+
+```{r}
+phosp_3m %>% count(patient_sq_l_t_communicate_delta, crf1a_resp_support_4levels) %>% data.frame()
+```
+
+
+```{r}
+phosp_3m %>% 
+  select(crf1a_resp_support_4levels, matches("eq5d5l_q.*_delta$")) %>%
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  drop_na(value) %>% 
+  
+  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+    facet_wrap(~ crf1a_resp_support_4levels) +
+  #scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "EQ5D change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+## Figure
+
+Updated to now just two comorbidity levels
+
+```{r fig.height=6, fig.width=10}
+plot_data = phosp_hosp %>% 
+  mutate(
+    age_admission_factor = case_when(
+      # age_admission < 20 ~ "<20",
+      # age_admission < 30 ~ "20-29",
+      # age_admission < 40 ~ "30-39",
+      age_admission < 50 ~ "<50",
+      age_admission < 60 ~ "50-59",
+      age_admission < 70 ~ "60-69",
+      # age_admission < 80 ~ "70-79",
+      # age_admission < 90 ~ "80-89",
+      is.na(age_admission) ~ NA_character_,
+      TRUE ~ "70+"
+    ),
+    no_comorbid_3levels = case_when(
+      no_comorbid == 0 ~ "No comorbidity",
+      no_comorbid > 0  ~ "Comorbidity", 
+    ) %>% 
+      factor() %>% 
+      fct_relevel("No comorbidity")
+  ) %>% 
+  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  group_by(age_admission_factor, no_comorbid_3levels, crf1a_resp_support_4levels) %>% 
+  count(psq_recovered) %>% 
+  mutate(nn = sum(n),
+         prop = 100 * n / nn) %>% 
+  filter(psq_recovered == "No") %>% 
+  mutate(
+    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[2],
+    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[3]
+  )
+
+plot_data %>% 
+  ggplot_lancet() +
+  geom_point(position = position_dodge(0.5), 
+             aes(x = fct_rev(age_admission_factor), y = prop)) +
+  geom_pointrange(position = position_dodge(0.5),
+                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax)) +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+  coord_flip() + 
+  scale_colour_brewer(palette = "Set1") + 
+  guides(colour = guide_legend(reverse = TRUE)) +
+  theme(legend.position = "top") +
+  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
+  ggtitle("Proportion not recovered from COVID-19",
+          paste0("N = ", total_n))
+```
+
+```{r fig.height=6, fig.width=10}
+plot_data = phosp_hosp %>% 
+  mutate(
+    age_admission_factor = case_when(
+      # age_admission < 20 ~ "<20",
+      # age_admission < 30 ~ "20-29",
+      # age_admission < 40 ~ "30-39",
+      age_admission < 50 ~ "<50",
+      age_admission < 60 ~ "50-59",
+      # age_admission < 70 ~ "60-69",
+      # age_admission < 80 ~ "70-79",
+      # age_admission < 90 ~ "80-89",
+      is.na(age_admission) ~ NA_character_,
+      TRUE ~ "60+"
+    ),
+    no_comorbid_3levels = case_when(
+      no_comorbid == 0 ~ "No comorbidity",
+      no_comorbid > 0  ~ "Comorbidity", 
+    ) %>% 
+      factor() %>% 
+      fct_relevel("No comorbidity")
+  ) %>% 
+  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  group_by(age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  count(psq_recovered) %>% 
+  mutate(nn = sum(n),
+         prop = 100 * n / nn) %>% 
+  filter(psq_recovered == "No") %>% 
+  mutate(
+    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[2],
+    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[3]
+  )
+
+plot_data %>% 
+  ggplot_lancet() +
+  geom_point(position = position_dodge(0.5), 
+             aes(x = fct_rev(age_admission_factor), y = prop, 
+                 colour = fct_rev(crf1a_sex))) +
+  geom_pointrange(position = position_dodge(0.5),
+                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax,
+                      colour = fct_rev(crf1a_sex))) +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+  coord_flip() + 
+  scale_colour_brewer(palette = "Set1") + 
+  guides(colour = guide_legend(reverse = TRUE)) +
+  theme(legend.position = "top") +
+  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
+  ggtitle("Proportion not recovered from COVID-19",
+          paste0("N = ", total_n))
+
+```
+
+### CRP vs BMI figure
+
+```{r fig.height=6, fig.width=6}
+phosp_3m %>% 
+  left_join(phosp_bloods_table) %>% 
+  select(crp_result, crf3a_bmi) %>% 
+  filter(crf3a_bmi < 70) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  ggplot_lancet(aes(crf3a_bmi, crp_result)) +
+  geom_jitter(alpha = 0.5) + 
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
+  scale_colour_brewer(palette = "Set1") +
+  scale_y_log10() + 
+  labs(x = "BMI", y = "CRP (mg/L, log scale)") +
+  ggtitle("CRP by BMI",
+          "Fitted line: generalised additive model (cubic spline)")
+```
+
+
+
+```{r eval=FALSE, fig.height=6, fig.width=10, include=FALSE}
+plot_data = phosp_hosp %>% 
+  mutate(
+    age_admission_factor = case_when(
+      # age_admission < 20 ~ "<20",
+      # age_admission < 30 ~ "20-29",
+      # age_admission < 40 ~ "30-39",
+      age_admission < 50 ~ "<50",
+      age_admission < 60 ~ "50-59",
+      age_admission < 70 ~ "60-69",
+      # age_admission < 80 ~ "70-79",
+      # age_admission < 90 ~ "80-89",
+      is.na(age_admission) ~ NA_character_,
+      TRUE ~ "70+"
+    )
+  ) %>% 
+  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  group_by(age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  count(psq_recovered) %>% 
+  mutate(nn = sum(n),
+         prop = 100 * n / nn) %>% 
+  filter(psq_recovered == "No") %>% 
+  mutate(
+    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[2],
+    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[3]
+  )
+
+plot_data %>% 
+  ggplot_lancet() +
+  geom_point(position = position_dodge(0.5), 
+             aes(x = fct_rev(age_admission_factor), y = prop, 
+                 colour = fct_rev(crf1a_sex))) +
+  geom_pointrange(position = position_dodge(0.5),
+                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax,
+                      colour = fct_rev(crf1a_sex))) +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+  coord_flip() + 
+  scale_colour_brewer(palette = "Set1") + 
+  guides(colour = guide_legend(reverse = TRUE)) +
+  theme(legend.position = "top") +
+  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
+  ggtitle("Proportion not recovered from COVID-19",
+          paste0("N = ", total_n))
+
+```
+
+## Figure: overall VAS change stratified
+
+```{r fig.height=6, fig.width=10}
+phosp_hosp %>% 
+  select(eq5d5l_summary_delta, age_admission, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  ggplot_lancet(aes(age_admission, eq5d5l_summary_delta)) + 
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cr") ) + 
+  scale_color_brewer(palette = "Set1") +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) + 
+  labs(x = "Age on admission (y)", y = "EQ5D VAS change", colour = "Sex") +
+  ggtitle("Change in ES5D VAS 3 months vs pre-covid",
+          paste0("N = ", total_n))
+```
+
+
+
+## Table S1: Full co-morbidities
+
+```{r}
+dependent = "crf1a_resp_support_4levels"
+```
+
+
+```{r}
+# For full comorbs supplement
+explanatory = c(# Comorbidities
+  'no_comorbid',
+  'crf1a_com_card_mi', 'crf1a_com_card_ihd', 
+  'crf1a_com_card_af', 'crf1a_com_card_ht', 
+  'crf1a_com_card_chf', 'crf1a_com_card_chd', 
+  'crf1a_com_card_vhd', 'crf1a_com_card_pid', 
+  'crf1a_com_card_pvd', 'crf1a_com_card_hcd', 
+  'crf1a_com_card_catia', 
+  #'crf1a_com_card_other_yn', 'crf1a_com_card_other', 
+  'crf1a_com_neupsy_dem', 
+  #'crf1a_com_neupsy_other_yn', 
+  'crf1a_com_neupsy_da', 
+  'crf1a_com_neupsy_chron', 'crf1a_com_neupsy_pam', 
+  'crf1a_com_neupsy_ptm', 
+  #'crf1a_com_neupsy_other', 
+  'crf1a_com_res_copd', 'crf1a_com_res_ast', 
+  'crf1a_com_res_ild_yn', 'crf1a_com_res_bron', 
+  'crf1a_com_res_osa', 'crf1a_com_res_ohs', 
+  'crf1a_com_res_pe', #'crf1a_com_res_other_yn', 
+  #'crf1a_com_res_ild', 'crf1a_com_res_other', 
+  'crf1a_com_rheu_ctd', 'crf1a_com_rheu_ra', 
+  'crf1a_com_rheu_ost', 
+  #'crf1a_com_rheu_other_yn', 'crf1a_com_rheu_other', 
+  'crf1a_com_gast_pud', 
+  'crf1a_com_gast_ld', 'crf1a_com_gast_gord', 
+  'crf1a_com_gast_ibd', 'crf1a_com_gast_ibs', 
+  #'crf1a_com_gast_other_yn', 'crf1a_com_gast_other', 
+  'crf1a_com_mer_diab', 'crf1a_com_mer_diab_com', 
+  'crf1a_com_mer_hypot', 'crf1a_com_mer_hypert', 
+  'crf1a_com_mer_ckd_yn', 
+  #'crf1a_com_mer_other_yn', 
+  'crf1a_com_mer_ckd_stage', 
+  #'crf1a_com_mer_other', 
+  'crf1a_com_mh_stm', #'crf1a_com_mh_stm_detail', 
+  'crf1a_com_mh_leuk_yn', 'crf1a_com_mh_lymp_yn', 
+  #'crf1a_com_mh_other_yn', 
+  #''crf1a_com_mh_leuk_detail', 
+  #'crf1a_com_mh_lymp', 
+  #'crf1a_com_mh_other', 
+  'crf1a_com_id_aids', 'crf1a_com_id_hiv', 
+  'crf1a_com_id_cvh', 'crf1a_com_id_mt'
+  #'crf1a_com_id_other_yn'
+  )
+
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory, 
+                     na_include = TRUE, 
+                     add_col_totals = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+## Table S2
+
+Labels can be sorted.
+
+```{r}
+explanatory_wss = phosp_3m %>% 
+  select("patient_sq_l_t__new_disability", matches("patient_sq_l_t_.*_delta_change"), matches("psq_scale_.*_delta_change")) %>% 
+  names()
+
+phosp_3m %>% 
+  summary_factorlist(dependent,  explanatory_wss, 
+                     na_include = TRUE,
+                     add_col_totals = TRUE, 
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+## Table S3. Full symptom and health status table
+
+```{r}
+explanatory_hrqol = c(
+  "gad7_summary",
+  "phq9_summary",
+  "pcl5_summary",
+  "neadl_summary",
+  "sppb_score",
+  "mocal_total",
+  "mocal_total_corrected", 
+  "rcf_score",
+  
+  "pft_fev1_perc_pred",
+  "pft_fev1",
+  "pft_fev1_perc_pred_80",
+  "pft_fvc_perc_pred",
+  "pft_fvc",
+  "pft_fvc_perc_pred_80",
+  "pft_fev1_fvc",
+  "pft_fev1_fvc_70",
+  "pft_tlco",
+  "pft_tlco_pred",
+  "pft_tlco_pred_80",
+  "pft_kco",           
+  "pft_kco_pred",
+  "pft_kco_pred_80",
+  
+  "bnp_result",
+  "pnbnp_result",
+  "hba1c_result",
+  "egfr_result",
+  "ddi_result",
+  "crp_result"
+)
+
+phosp_3m %>%
+  left_join(phosp_wt_table) %>% 
+  left_join(phosp_pft_table) %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %T>% 
+  {data_in <<- .} %>% 
+  summary_factorlist(dependent,  explanatory_hrqol,
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     total_col = TRUE, 
+                     add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
+                     p = TRUE) %>%
+  mytable()
+```
+
+
+## Table S4
+
+
+```{r}
+neuro = c("loss_of_sense_of_smell", "loss_of_taste", "confusion_fuzzy_head", "difficulty_with_communicat", 
+          "difficulty_with_concentrat", "short_term_memory_loss", "physical_slowing_down", "slowing_down_in_your_think", "headache", 
+          "altered_personality_behavi", "limb_weakness", "problems_with_balance", "can_t_move_and_or_feel_one", "problems_seeing", 
+          "tingling_feeling_pins_and", "can_t_fully_move_or_contro", "tremor_shakiness", "seizures")
+musculoskeletal = c("aching_in_your_muscles_pai", "joint_pain_or_swelling")
+cardiorespiratory = c("leg_ankle_swelling", "chest_pain", "chest_tightness", "pain_on_breathing", "palpitations", 
+                      "dizziness_or_lightheadness", "fainting_blackouts")
+gastrointestinal_genitourinary = c("diarrhoea", "constipation", "nausea_vomiting", "abdominal_pain", "loss_of_appetite", 
+                                   "loss_of_control_of_passing", "loss_of_control_of_opening", "weight_loss", "stomach_pain", 
+                                   "psq_symp_ed", "skin_rash", "lumpy_lesions_purple_pink", "bleeding")
+
+all_symptoms = c(cardiorespiratory, gastrointestinal_genitourinary, neuro, musculoskeletal)
+
+dependent = "no_comorbid_2levels"
+
+phosp_3m %>% 
+  mutate(across(all_symptoms, ~ fct_relevel(.x, "No"))) %T>%
+  {data_in <<- .} %>% 
+  summary_factorlist(dependent,  all_symptoms, 
+                     total_col = TRUE) %>% 
+  ff_remove_ref() %>% 
+  ff_column_totals(data_in, dependent) %>% 
+  mytable()
+```
+
+## Table S5
+
+```{r}
+explanatory_occupation = c(
+  "crf1b_healthcare_worker", "crf1b_caring"
+)
+dependent = "crf1a_resp_support_4levels"
+
+phosp_3m %>%
+  left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels, crf1b_healthcare_worker, crf1b_caring)) %>% 
+  summary_factorlist(dependent,  explanatory_occupation ,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE,
+                     add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
+                     p = TRUE) %>% 
+  mytable()
+```
+
+
+
+## Old below here. Not included.
+
+## Table S2A: Symptoms prior to index hospitalisation
+
+```{r}
+explanatory_presenting_symptoms = c(
+  'crf1a_fever_history', 'crf1a_cough', 'crf1a_cough_sputum', 'crf1a_cough_blood', 
+  'crf1a_sore_throat', 'crf1a_runny_nose', 'crf1a_ear_pain', 'crf1a_wheezing', 
+  'crf1a_chest_pain', 'crf1a_muscle_aches', 'crf1a_join_pain', 'crf1a_fatigue', 
+  'crf1a_shortness_breath', 'crf1a_loss_taste', 'crf1a_loss_smell', 'crf1a_chest_indrawing', 
+  'crf1a_headache', 'crf1a_confusion', 'crf1a_seizures', 'crf1a_pain', 'crf1a_nausea', 
+  'crf1a_diarrhoea', 'crf1a_conjunctivitis', 'crf1a_skin_rash', 'crf1a_skin_ulcers', 
+  'crf1a_lymphadenopathy', 'crf1a_bleeding'
+)
+
+phosp_hosp %>% 
+  summary_factorlist(dependent,  explanatory_presenting_symptoms, 
+                     na_include = TRUE,
+                     add_col_totals = TRUE, 
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+## Table S2B: Symptoms at 3 months
+
+```{r}
+neuro = c(
+  "loss_of_sense_of_smell", "loss_of_taste", "confusion_fuzzy_head", "difficulty_with_communicat", 
+          "difficulty_with_concentrat", "short_term_memory_loss", "physical_slowing_down", "slowing_down_in_your_think", "headache", 
+          "altered_personality_behavi", "limb_weakness", "problems_with_balance", "can_t_move_and_or_feel_one", "problems_seeing", 
+          "tingling_feeling_pins_and", "can_t_fully_move_or_contro", "tremor_shakiness", "seizures")
+musculoskeletal = c("aching_in_your_muscles_pai", "joint_pain_or_swelling")
+cardiorespiratory = c("leg_ankle_swelling", "chest_pain", "chest_tightness", "pain_on_breathing", "palpitations", 
+                      "dizziness_or_lightheadness", "fainting_blackouts")
+gastrointestinal_genitourinary = c("diarrhoea", "constipation", "nausea_vomiting", "abdominal_pain", "loss_of_appetite", 
+                                   "loss_of_control_of_passing", "loss_of_control_of_opening", "weight_loss", "stomach_pain", 
+                                   "psq_symp_ed", "skin_rash", "lumpy_lesions_purple_pink", "bleeding")
+
+all_symptoms = c("symptom_any", cardiorespiratory, gastrointestinal_genitourinary, neuro, musculoskeletal)
+
+phosp_3m %>% 
+  summary_factorlist(dependent,  all_symptoms, 
+                     na_include = TRUE,
+                     add_col_totals = TRUE, 
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+## Table 3A: HRQOL at 3 months
+
+```{r}
+psq_scale = c("psq_scale_blness_24hrs", "psq_scale_fatigue_24hrs", "psq_scale_sleep_24hrs", "psq_scale_cough_24hrs", 
+              "psq_scale_pain_24hrs", "psq_scale_blness_since", "psq_scale_fatigue_since", "psq_scale_sleep_since", 
+              "psq_scale_cough_since", "psq_scale_pain_since")
+psq_l_t = c("patient_sq_l_t_seeing", "patient_sq_l_t_hearing", "patient_sq_l_t_walking", "patient_sq_l_t_self_care", 
+            "patient_sq_l_t_communicate")
+psq = c("psq_feverish", "psq_feverish_time", "psq_tinnitus_since", "psq_balance_q1_since", "psq_balance_q2_since",
+        "psq_itu_airway", "psq_itu_swallow", "psq_itu_voice")
+
+all_psq = c(psq_scale, psq_l_t, psq)
+
+phosp_3m %>% 
+  summary_factorlist(dependent,  all_psq, 
+                     na_include = TRUE,
+                     add_col_totals = TRUE, 
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3B. MRC DS 3 months
+```{r}
+explanatory_symptoms_since = c(
+  "mrcds_blness_exer_since", "mrcds_short_level_since",
+  "mrcds_walk_slower_since", "mrcds_after_walk_since", "mrcds_leave_house_since"
+) 
+phosp_3m %>%
+  summary_factorlist(dependent,  explanatory_symptoms_since,
+                     na_include = TRUE, 
+                     total_col = TRUE, add_col_totals = TRUE) %>% 
+  mytable()
+```
+
+### Table 3C. Dyspnoea. 
+```{r}
+explanatory_dyspnoea = phosp_3m %>% 
+  select(starts_with("dyspnoea_")) %>% 
+  names()
+
+
+phosp_3m %>%
+  summary_factorlist(dependent, explanatory_dyspnoea,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3D. FACIT. 
+```{r}
+explanatory_facit = phosp_3m %>% 
+  select(starts_with("facit_"), -facit_date) %>% 
+  names()
+
+phosp_3m %>%
+  summary_factorlist(dependent, explanatory_facit,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3E. BPI. 
+```{r eval=FALSE, include=FALSE}
+explanatory_bpi = phosp_3m %>% 
+  select(starts_with("bpi_"), -bpi_date) %>% 
+  names()
+
+phosp_3m %>%
+  summary_factorlist(dependent, explanatory_bpi,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3F. GAD7. 
+```{r}
+explanatory_gad7 = phosp_3m %>% 
+  select(starts_with("gad7_"), -gad7_date) %>% 
+  names()
+
+phosp_3m %>%
+  summary_factorlist(dependent, explanatory_gad7,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3G. PHQ9. 
+```{r}
+explanatory_phq9 = phosp_3m %>% 
+  select(starts_with("phq9_"), -phq9_date) %>% 
+  names()
+
+phosp_3m %>%
+  summary_factorlist(dependent, explanatory_phq9,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3H. PCL5. 
+```{r}
+explanatory_pcl5 = phosp_3m %>% 
+  select(starts_with("pcl5_"), -pcl5_date) %>% 
+  names()
+
+phosp_3m %>%
+  summary_factorlist(dependent, explanatory_pcl5,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+### Table 3I. Nottingham ADL. 
+```{r}
+explanatory_neadl = phosp_3m %>% 
+  select(starts_with("neadl_"), -neadl_date) %>% 
+  names()
+
+phosp_3m %>%
+  summary_factorlist(dependent, explanatory_neadl,
+                     na_include = TRUE, na_include_dependent = TRUE,
+                     total_col = TRUE) %>% 
+  mytable()
+```
+
+
+
+
+
