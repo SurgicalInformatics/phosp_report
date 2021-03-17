@@ -5,6 +5,8 @@ output:
   word_document:
     toc: yes
     toc_depth: '3'
+editor_options: 
+  chunk_output_type: inline
 ---
 
 
@@ -24,6 +26,7 @@ library(knitr)
 library(tidyverse)
 library(rmarkdown)
 library(cluster)
+library(ggh4x)
 
 summary_factorlist <- purrr::partial(finalfit::summary_factorlist, na_to_prop = FALSE)
 ```
@@ -219,6 +222,24 @@ explanatory_hrqol = c(
   "mocal_total"
 )  
 
+scales_y = list(
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse()
+  )
+
+scales_x = list(
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse()
+  )
+
 # MOCA
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
@@ -239,9 +260,11 @@ phosp_3m %>%
   ggplot_lancet(aes(mocal_total, value, colour = cluster)) +
   geom_jitter(alpha = 0.5) + 
   xlim(c(10, NA)) +
+  # scale_x_reverse() +
   scale_colour_brewer(palette = "Set1") + 
   labs(x = "Cognition (MOCA)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
+  facetted_pos_scales(y = scales_y, x = scales_x) + 
   theme(
     legend.position = c(1, 1.17)
   ) +
@@ -254,6 +277,15 @@ phosp_3m %>%
 
 ```{r gad7, fig.height=6, fig.width=8}
 # GAD7
+scales = list(
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse()
+  )
+
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
   select(cluster, explanatory_hrqol) %>% 
@@ -276,6 +308,7 @@ phosp_3m %>%
   scale_colour_brewer(palette = "Set1") + 
   labs(x = "Anxiety (GAD7)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
+  facetted_pos_scales(y = scales) + 
   theme(
     legend.position = c(1, 1.17)
   ) +
@@ -288,6 +321,15 @@ phosp_3m %>%
 
 ```{r phq7, fig.height=6, fig.width=8}
 # PHQ7
+scales = list(
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse(),
+  scale_y_continuous(),
+  scale_y_reverse()
+  )
+
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
   select(cluster, explanatory_hrqol) %>% 
@@ -310,6 +352,7 @@ phosp_3m %>%
   scale_colour_brewer(palette = "Set1") + 
   labs(x = "Depression (PHQ7)" , colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
+  facetted_pos_scales(y = scales) + 
   theme(
     legend.position = c(1, 1.17)
   ) +
@@ -323,6 +366,15 @@ phosp_3m %>%
 
 ```{r pcl5, fig.height=6, fig.width=8}
 # PCL5
+scales = list(
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse(),
+  scale_y_continuous(),
+  scale_y_reverse()
+  )
+
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
   select(cluster, explanatory_hrqol) %>% 
@@ -345,6 +397,7 @@ phosp_3m %>%
   scale_colour_brewer(palette = "Set1") + 
   labs(x = "PTSD (PCL5)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
+  facetted_pos_scales(y = scales) + 
   theme(
     legend.position = c(1, 1.17)
   ) +
@@ -356,6 +409,16 @@ phosp_3m %>%
 
 ```{r dys, fig.height=6, fig.width=8}
 # DYS
+scales = list(
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse()
+  )
+
+
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
   select(cluster, explanatory_hrqol) %>% 
@@ -378,6 +441,7 @@ phosp_3m %>%
   scale_colour_brewer(palette = "Set1") + 
   labs(x = "Dyspnoea 12", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
+  facetted_pos_scales(y = scales) + 
   theme(
     legend.position = c(1, 1.17)
   ) +
@@ -389,6 +453,17 @@ phosp_3m %>%
 
 ```{r facit, fig.height=6, fig.width=8}
 # FACIT
+scales = list(
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse()
+  )
+
+
+
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
   select(cluster, explanatory_hrqol) %>% 
@@ -411,6 +486,7 @@ phosp_3m %>%
   scale_colour_brewer(palette = "Set1") + 
   labs(x = "Function (FACIT)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
+  facetted_pos_scales(y = scales) + 
   theme(
     legend.position = c(1, 1.17)
   ) +
@@ -422,6 +498,25 @@ phosp_3m %>%
 
 ```{r sppb, fig.height=6, fig.width=8}
 # SPPB
+scales_y = list(
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_continuous(),
+  scale_y_reverse(),
+  scale_y_continuous(),
+  scale_y_continuous()
+  )
+
+scales_x = list(
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse(), 
+  scale_x_reverse()
+  )
+
+
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
   select(cluster, explanatory_hrqol) %>% 
@@ -441,9 +536,11 @@ phosp_3m %>%
   ) %>% 
   ggplot_lancet(aes(sppb_score, value, colour = cluster)) +
   geom_jitter(alpha = 0.5) + 
+  #scale_x_reverse() +
   scale_colour_brewer(palette = "Set1") + 
   labs(x = "Physical (SPPB)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
+  facetted_pos_scales(x = scales_x, y = scales_y) + 
   theme(
     legend.position = c(1, 1.17)
   ) +
@@ -760,7 +857,7 @@ phosp_3m %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels, crf1b_healthcare_worker, crf1b_caring)) %>% 
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory_occupation,
-                     na_include = TRUE, na_include_dependent = TRUE,
+                     na_include = TRUE, 
                      total_col = TRUE, column = FALSE, 
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
                      p = TRUE) %>% 
@@ -774,10 +871,75 @@ phosp_3m %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels, crf1b_healthcare_worker, crf1b_caring)) %>% 
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory_occupation,
-                     na_include = TRUE, na_include_dependent = TRUE,
+                     na_include = TRUE, 
                      total_col = TRUE, column = TRUE, 
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
                      p = TRUE) %>% 
   mytable()
+```
+
+## CRP vs BMI figure
+
+```{r}
+cor_result = phosp_3m %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_cluster) %>% 
+  select(crp_result, crf3a_bmi, cluster) %>% 
+  filter(crf3a_bmi < 70) %$%
+  cor.test(log(crp_result), crf3a_bmi) %>% 
+  tidy()
+
+cor_label = paste0("Pearson correlation coefficient\n", cor_result$estimate %>% round_tidy(3), " (p ", cor_result$p.value %>% p_tidy(3), ")")
+```
+
+```{r fig.height=6, fig.width=8}
+p1 = phosp_3m %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_cluster) %>% 
+  select(crp_result, crf3a_bmi, cluster) %>% 
+ filter(crf3a_bmi < 70) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  ggplot_lancet(aes(crf3a_bmi, crp_result, colour = cluster)) +
+  geom_jitter(alpha = 0.5) + 
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_colour_brewer("",palette = "Set1") +
+  scale_y_log10() + 
+  labs(x = "BMI", y = "CRP (mg/L, log scale)") +
+  annotate("text", x = 60, y = 1, label = cor_label, hjust = 1) +
+  guides(colour = guide_legend(ncol = 2)) +
+  ggtitle("CRP by BMI",
+          "Fitted line: linear regression")
+p1
+```
+
+```{r}
+phosp_3m %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_cluster) %>% 
+  select(crp_result, crf3a_bmi, cluster) %>% 
+  filter(crf3a_bmi < 70) %$%
+  cor.test(log(crp_result), crf3a_bmi)
+```
+
+```{r}
+phosp_3m %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_cluster) %>% 
+  select(crp_result, crf3a_bmi, cluster) %>% 
+  filter(crf3a_bmi < 70) %>% 
+  lmmulti("log(crp_result)", c("crf3a_bmi")) %>% 
+  summary()
+```
+
+
+```{r}
+phosp_3m %>% 
+  left_join(phosp_bloods_table) %>% 
+  left_join(phosp_cluster) %>% 
+  select(crp_result, crf3a_bmi, cluster) %>% 
+  filter(crf3a_bmi < 70) %>% 
+  lmmulti("log(crp_result)", c("crf3a_bmi", "cluster")) %>% 
+  summary()
 ```
 

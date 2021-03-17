@@ -504,22 +504,13 @@ phosp = phosp %>%
     ) %>% 
       ff_label("MOCA <23"), 
     
-    ### MOCA corrected
-    mocal_total_corrected = case_when(
-      crf1b_edu %in% c("None", "Primary school",
-                       "Secondary school (GCSE level, NVQ level 1/2 or equivalent, typically age 16)") ~ mocal_total + 1,
-      TRUE ~ mocal_total
-    ),
+    ## MOCA corrected is done below, because it needs a fill on education level. 
     
-    mocal_total_corrected_summary = case_when(
-      mocal_total_corrected < 23 ~ "Yes",
-      mocal_total_corrected >= 23 ~ "No",
-    ) %>% 
-      ff_label("MOCA (corrected) <23"), 
     
     # Treatment -----
-    across(c("crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac"), ~ fct_recode(., 
-                                                                                   NULL = "N/K") %>% 
+    across(c("crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac"), 
+           ~ fct_recode(., 
+                        NULL = "N/K") %>% 
              fct_relevel("No")
     ),
     
@@ -588,8 +579,26 @@ phosp = phosp %>%
 phosp = phosp %>%  
   group_by(study_id) %>% 
   fill(age_admission, age_admission_factor, crf1a_sex,  crf1b_eth_pft, crf3a_rest_height,
-       crf1a_date_dis, .direction = "downup") %>% 
+       crf1a_date_dis, crf1b_edu, .direction = "downup") %>% 
   ungroup() %>% 
+  ff_relabel_df(phosp)
+
+
+# MOCA adjusted for level of educational attainment, which needs the above fill. 
+phosp = phosp %>% 
+  mutate(
+    mocal_total_corrected = case_when(
+      crf1b_edu %in% c("None", "Primary school",
+                       "Secondary school (GCSE level, NVQ level 1/2 or equivalent, typically age 16)") ~ mocal_total + 1,
+      TRUE ~ mocal_total
+    ),
+    
+    mocal_total_corrected_summary = case_when(
+      mocal_total_corrected < 23 ~ "Yes",
+      mocal_total_corrected >= 23 ~ "No",
+    ) %>% 
+      ff_label("MOCA (corrected) <23")
+  ) %>% 
   ff_relabel_df(phosp)
 
 
@@ -1016,7 +1025,8 @@ phosp_3m = phosp_3m %>%
     symptom_any = if_else(symptom_count > 0, "Yes", "No") %>% 
       ff_label("Any symptom at 3 months (%)")) %>% 
   select(study_id, symptom_count, symptom_any) %>% 
-  left_join(phosp_3m, by = "study_id")
+  left_join(phosp_3m, by = "study_id") %>% 
+  ff_relabel_df(phosp_3m)
 
 
 

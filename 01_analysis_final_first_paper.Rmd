@@ -29,6 +29,7 @@ library(tidyverse)
 library(rmarkdown)
 
 summary_factorlist <- purrr::partial(finalfit::summary_factorlist, na_to_prop = FALSE)
+source("geom_boxplot2.R")
 ```
 
 ```{r eval=FALSE, include=FALSE}
@@ -207,6 +208,16 @@ phosp_hosp %>%
   ff_row_totals(phosp_hosp, dependent, explanatory, missing_column = FALSE) %>% 
   mytable()
 ```
+
+### Missing for BMI
+```{r}
+phosp_hosp %>%
+  mutate(crf3a_bmi = ifelse(is.na(crf3a_bmi), "BMI missing", "BMI complete")) %>% 
+  summary_factorlist(dependent, "crf3a_bmi", na_include = TRUE, total_col = TRUE) %>% 
+  mytable()
+```
+
+
 
 ## Table 2: Proportion unchanged, worse or better in terms of overall visual analogue score and EQ5D prior to hospitalisation and at follow-up stratified by severity of acute illness.
 
@@ -660,287 +671,138 @@ phosp_3m %>%
 
 ## Figures
 
-```{r}
-phosp_hosp %>% 
-  select(eq5d5l_summary_delta, crf1a_resp_support_4levels) %>% 
-  drop_na() %T>% 
-  {total_n <<- dim(.)[[1]]} %>% 
-  ggplot_lancet(aes(fct_rev(crf1a_resp_support_4levels), eq5d5l_summary_delta, 
-                    fill = fct_rev(crf1a_resp_support_4levels))) + 
-  geom_boxplot(outlier.shape = NA) + 
-  geom_hline(yintercept = 0) +
-  coord_flip() +
-  scale_y_continuous(limits = c(-60, 60)) +
-  labs(x = "", y = "ESQ5d VAS change") +
-  theme(legend.position = "none",
-        axis.line.x = element_blank(),
-        axis.ticks.x = element_blank()
-  )
+```{r fig.height=6, fig.width=8}
+  phosp_3m %>% 
+    select(symptom_count) %>% 
+    ggplot_lancet(aes(x = symptom_count)) +
+    geom_histogram(binwidth = 1, colour = "white", fill = "light blue") + 
+    labs(x = "Number of symptoms") +
+    ggtitle("Total number of symptoms reported by each individual")
 ```
 
-```{r}
-phosp_3m %>% 
-  select(crf1a_resp_support_4levels, matches("psq_scale_.*_delta$")) %>%
-  gather("key", "value", -crf1a_resp_support_4levels) %>% 
-  drop_na(value) %>% 
-  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
-  geom_boxplot(outlier.shape = NA) + 
-  geom_hline(yintercept = 0) +
-  coord_flip() +
-  facet_wrap(~ crf1a_resp_support_4levels) +
-  #scale_y_continuous(limits = c(-60, 60)) +
-  labs(x = "", y = "WG-SS change") +
-  theme(legend.position = "none",
-        axis.line.x = element_blank(),
-        axis.ticks.x = element_blank()
-  )
-```
+```{r fig.height=12, fig.width=8}
+library(egg)
+library(grid)
 
-
-```{r}
-phosp_3m %>% 
-  select(crf1a_resp_support_4levels, matches("patient_sq_l_t_.*delta$")) %>%
-  gather("key", "value", -crf1a_resp_support_4levels) %>% 
-  drop_na(value) %>% 
-  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
-  geom_boxplot() + 
-  geom_hline(yintercept = 0) +
-  coord_flip() +
-  facet_wrap(~ crf1a_resp_support_4levels) +
-  #scale_y_continuous(limits = c(-60, 60)) +
-  labs(x = "", y = "WG-SS change") +
-  theme(legend.position = "none",
-        axis.line.x = element_blank(),
-        axis.ticks.x = element_blank()
-  )
-```
-
-Not much data in some of these:
-
-```{r}
-phosp_3m %>% count(patient_sq_l_t_communicate_delta, crf1a_resp_support_4levels) %>% data.frame()
-```
-
-
-```{r}
-phosp_3m %>% 
-  select(crf1a_resp_support_4levels, matches("eq5d5l_q.*_delta$")) %>%
-  gather("key", "value", -crf1a_resp_support_4levels) %>% 
-  drop_na(value) %>% 
-  
-  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
-  geom_boxplot(outlier.shape = NA) + 
-  geom_hline(yintercept = 0) +
-  coord_flip() +
-    facet_wrap(~ crf1a_resp_support_4levels) +
-  #scale_y_continuous(limits = c(-60, 60)) +
-  labs(x = "", y = "EQ5D change") +
-  theme(legend.position = "none",
-        axis.line.x = element_blank(),
-        axis.ticks.x = element_blank()
-  )
-```
-
-## Figure
-
-Updated to now just two comorbidity levels
-
-```{r fig.height=6, fig.width=10}
-plot_data = phosp_hosp %>% 
+p1 = phosp_3m %>% 
+  select(matches("eq5d5l_q.*_delta_change$")) %>% 
+  gather() %>% 
+  group_by(key, value) %>% 
+  summarise(n = n()) %>% 
+  drop_na() %>% 
+  group_by(key) %>% 
   mutate(
-    age_admission_factor = case_when(
-      # age_admission < 20 ~ "<20",
-      # age_admission < 30 ~ "20-29",
-      # age_admission < 40 ~ "30-39",
-      age_admission < 50 ~ "<50",
-      age_admission < 60 ~ "50-59",
-      age_admission < 70 ~ "60-69",
-      # age_admission < 80 ~ "70-79",
-      # age_admission < 90 ~ "80-89",
-      is.na(age_admission) ~ NA_character_,
-      TRUE ~ "70+"
-    ),
-    no_comorbid_3levels = case_when(
-      no_comorbid == 0 ~ "No comorbidity",
-      no_comorbid > 0  ~ "Comorbidity", 
-    ) %>% 
-      factor() %>% 
-      fct_relevel("No comorbidity")
-  ) %>% 
-  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_resp_support_4levels) %>% 
-  drop_na() %T>% 
-  {total_n <<- dim(.)[[1]]} %>% 
-  group_by(age_admission_factor, no_comorbid_3levels, crf1a_resp_support_4levels) %>% 
-  count(psq_recovered) %>% 
-  mutate(nn = sum(n),
-         prop = 100 * n / nn) %>% 
-  filter(psq_recovered == "No") %>% 
-  mutate(
-    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
-                                method=c("wilson"))[2],
-    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
-                                method=c("wilson"))[3]
-  )
-
-plot_data %>% 
-  ggplot_lancet() +
-  geom_point(position = position_dodge(0.5), 
-             aes(x = fct_rev(age_admission_factor), y = prop)) +
-  geom_pointrange(position = position_dodge(0.5),
-                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax)) +
-  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+    nn = sum(n),
+    prop = 100 * n / nn,
+    prop = ifelse(value %in% c("No change", "Improvement"), prop * -1, prop)) %>% 
+  ungroup() %>% 
+  mutate(key = fct_recode(key, 
+                          "Mobility" = "eq5d5l_q1_delta_change",
+                          "Self-care" = "eq5d5l_q2_delta_change",
+                          "Usual activities" = "eq5d5l_q3_delta_change",
+                          "Pain / discomfort" = "eq5d5l_q4_delta_change",
+                          "Anxiety / Depression " = "eq5d5l_q5_delta_change")
+  ) %T>%
+  {label_data <<- (.) %>% 
+    filter(value == "Worse") %>% 
+    mutate(prop_label = paste0(round_tidy(prop, 1), "%"))} %>%
+  ggplot_lancet(aes(x = fct_rev(key), y = prop, fill = value)) + 
+  geom_col() +
+  geom_text(data = label_data, aes(label = prop_label), size = 5, colour = "white", hjust = 1.3) +
   coord_flip() + 
-  scale_colour_brewer(palette = "Set1") + 
-  guides(colour = guide_legend(reverse = TRUE)) +
-  theme(legend.position = "top") +
-  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
-  ggtitle("Proportion not recovered from COVID-19",
-          paste0("N = ", total_n))
-```
+  scale_fill_brewer("", palette = "Blues") +
+  labs(y = "Proportion (%)", x = "") +
+  theme(legend.position = c(1, 1.35),
+        legend.background=element_blank()) +
+  ggtitle("Change in EQ5D domains (whole cohort)",
+          " ")
 
-```{r fig.height=6, fig.width=10}
-plot_data = phosp_hosp %>% 
+
+p2 = phosp_3m %>% 
+  select(crf1a_resp_support_4levels, matches("eq5d5l_q.*_delta_change$")) %>% 
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  group_by(key, value, crf1a_resp_support_4levels) %>% 
+  summarise(n = n()) %>% 
+  drop_na() %>% 
+  group_by(key, crf1a_resp_support_4levels) %>% 
   mutate(
-    age_admission_factor = case_when(
-      # age_admission < 20 ~ "<20",
-      # age_admission < 30 ~ "20-29",
-      # age_admission < 40 ~ "30-39",
-      age_admission < 50 ~ "<50",
-      age_admission < 60 ~ "50-59",
-      # age_admission < 70 ~ "60-69",
-      # age_admission < 80 ~ "70-79",
-      # age_admission < 90 ~ "80-89",
-      is.na(age_admission) ~ NA_character_,
-      TRUE ~ "60+"
-    ),
-    no_comorbid_3levels = case_when(
-      no_comorbid == 0 ~ "No comorbidity",
-      no_comorbid > 0  ~ "Comorbidity", 
-    ) %>% 
-      factor() %>% 
-      fct_relevel("No comorbidity")
+    nn = sum(n),
+    prop = 100 * n / nn,
+    prop = ifelse(value %in% c("No change", "Improvement"), prop * -1, prop)
   ) %>% 
-  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
-  drop_na() %T>% 
-  {total_n <<- dim(.)[[1]]} %>% 
-  group_by(age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
-  count(psq_recovered) %>% 
-  mutate(nn = sum(n),
-         prop = 100 * n / nn) %>% 
-  filter(psq_recovered == "No") %>% 
+  ungroup() %>% 
   mutate(
-    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
-                                method=c("wilson"))[2],
-    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
-                                method=c("wilson"))[3]
-  )
-
-plot_data %>% 
-  ggplot_lancet() +
-  geom_point(position = position_dodge(0.5), 
-             aes(x = fct_rev(age_admission_factor), y = prop, 
-                 colour = fct_rev(crf1a_sex))) +
-  geom_pointrange(position = position_dodge(0.5),
-                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax,
-                      colour = fct_rev(crf1a_sex))) +
-  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+    key = fct_recode(key, 
+                     "Mobility" = "eq5d5l_q1_delta_change",
+                     "Self-care" = "eq5d5l_q2_delta_change",
+                     "Usual activities" = "eq5d5l_q3_delta_change",
+                     "Pain / discomfort" = "eq5d5l_q4_delta_change",
+                     "Anxiety / Depression " = "eq5d5l_q5_delta_change")
+  ) %T>%
+  {label_data <<- (.) %>% 
+    filter(value == "Worse") %>% 
+    mutate(prop_label = paste0(round_tidy(prop, 1), "%"))} %>%
+  ggplot_lancet(aes(x = fct_rev(key), y = prop, fill = value)) + 
+  geom_col() +
+  geom_text(data = label_data, aes(label = prop_label), size = 4, colour = "white", hjust = 1.1) +
   coord_flip() + 
-  scale_colour_brewer(palette = "Set1") + 
-  guides(colour = guide_legend(reverse = TRUE)) +
-  theme(legend.position = "top") +
-  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
-  ggtitle("Proportion not recovered from COVID-19",
-          paste0("N = ", total_n))
+  scale_fill_brewer("", palette = "Blues") +
+  labs(y = "Proportion (%)", x = "") +
+  facet_wrap(. ~ crf1a_resp_support_4levels) +
+  theme(legend.position = c(1, 1.2),
+        legend.background = element_blank()) +
+  ggtitle("Change in EQ5D domain (stratified)",
+          " ")
 
-```
-
-### CRP vs BMI figure
-
-```{r fig.height=6, fig.width=6}
-phosp_3m %>% 
-  left_join(phosp_bloods_table) %>% 
-  select(crp_result, crf3a_bmi) %>% 
-  filter(crf3a_bmi < 70) %>% 
-  drop_na() %T>% 
-  {total_n <<- dim(.)[[1]]} %>% 
-  ggplot_lancet(aes(crf3a_bmi, crp_result)) +
-  geom_jitter(alpha = 0.5) + 
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cs")) +
-  scale_colour_brewer(palette = "Set1") +
-  scale_y_log10() + 
-  labs(x = "BMI", y = "CRP (mg/L, log scale)") +
-  ggtitle("CRP by BMI",
-          "Fitted line: generalised additive model (cubic spline)")
-```
-
-
-
-```{r eval=FALSE, fig.height=6, fig.width=10, include=FALSE}
-plot_data = phosp_hosp %>% 
-  mutate(
-    age_admission_factor = case_when(
-      # age_admission < 20 ~ "<20",
-      # age_admission < 30 ~ "20-29",
-      # age_admission < 40 ~ "30-39",
-      age_admission < 50 ~ "<50",
-      age_admission < 60 ~ "50-59",
-      age_admission < 70 ~ "60-69",
-      # age_admission < 80 ~ "70-79",
-      # age_admission < 90 ~ "80-89",
-      is.na(age_admission) ~ NA_character_,
-      TRUE ~ "70+"
-    )
+p3 = phosp_3m %>% 
+  select(eq5d5l_summary_delta, eq5d5l_utility_index_delta) %>% 
+  gather() %>% 
+  mutate(key = 
+           fct_recode(key, 
+                      "Change in VAS" = "eq5d5l_summary_delta",
+                      "Change in utility index" = "eq5d5l_utility_index_delta"
+           )
   ) %>% 
-  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
-  drop_na() %T>% 
-  {total_n <<- dim(.)[[1]]} %>% 
-  group_by(age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
-  count(psq_recovered) %>% 
-  mutate(nn = sum(n),
-         prop = 100 * n / nn) %>% 
-  filter(psq_recovered == "No") %>% 
-  mutate(
-    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
-                                method=c("wilson"))[2],
-    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
-                                method=c("wilson"))[3]
-  )
+  ggplot_lancet(aes(x = "", y = value)) + 
+  geom_boxplot2(aes(fill = key), outlier.shape = NA, width.errorbar = 0) + 
+ geom_jitter(width = 0.4, alpha = 0.05) +
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  labs(x = "", y = "") +
+  facet_grid(. ~ key, scale = "free_x") + 
+  theme(legend.position = "none",
+        axis.ticks.y = element_blank()) + 
+  ggtitle("Change in EQ5D summary metrics (whole cohort)")
 
-plot_data %>% 
-  ggplot_lancet() +
-  geom_point(position = position_dodge(0.5), 
-             aes(x = fct_rev(age_admission_factor), y = prop, 
-                 colour = fct_rev(crf1a_sex))) +
-  geom_pointrange(position = position_dodge(0.5),
-                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax,
-                      colour = fct_rev(crf1a_sex))) +
-  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
-  coord_flip() + 
-  scale_colour_brewer(palette = "Set1") + 
-  guides(colour = guide_legend(reverse = TRUE)) +
-  theme(legend.position = "top") +
-  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
-  ggtitle("Proportion not recovered from COVID-19",
-          paste0("N = ", total_n))
 
+p4 = phosp_3m %>% 
+  select(eq5d5l_summary_delta, eq5d5l_utility_index_delta, crf1a_resp_support_4levels) %>% 
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  mutate(key = 
+           fct_recode(key, 
+                      "Change in VAS" = "eq5d5l_summary_delta",
+                      "Change in utility index" = "eq5d5l_utility_index_delta"
+           )
+  ) %>% 
+  ggplot_lancet(aes(x = fct_rev(crf1a_resp_support_4levels), y = value)) + 
+  geom_boxplot2(aes(fill = key), outlier.shape = NA, width.errorbar = 0) + 
+  # geom_jitter(width = 0.2, alpha = 0.2) +
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  labs(x = "", y = "") +
+  facet_grid(. ~ key, scale = "free_x") + 
+  theme(legend.position = "none") + 
+  ggtitle("Change in EQ5D summary metrics (stratified)")
+
+
+ggarrange(p1, p3, p2, p4, ncol = 1, labels = c("A", "B", "C", "D"), heights = c(1, 1, 2, 1),
+               label.args = list(gp=gpar(font=1, cex = 1.5))
+               )
+
+# PDF 8,65 x 12
 ```
 
-## Figure: overall VAS change stratified
 
-```{r fig.height=6, fig.width=10}
-phosp_hosp %>% 
-  select(eq5d5l_summary_delta, age_admission, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
-  drop_na() %T>% 
-  {total_n <<- dim(.)[[1]]} %>% 
-  ggplot_lancet(aes(age_admission, eq5d5l_summary_delta)) + 
-  geom_point(alpha = 0.2) +
-  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cr") ) + 
-  scale_color_brewer(palette = "Set1") +
-  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) + 
-  labs(x = "Age on admission (y)", y = "EQ5D VAS change", colour = "Sex") +
-  ggtitle("Change in ES5D VAS 3 months vs pre-covid",
-          paste0("N = ", total_n))
-```
 
 
 
@@ -1079,10 +941,11 @@ phosp_3m %>%
 
 
 ```{r}
-neuro = c("loss_of_sense_of_smell", "loss_of_taste", "confusion_fuzzy_head", "difficulty_with_communicat", 
-          "difficulty_with_concentrat", "short_term_memory_loss", "physical_slowing_down", "slowing_down_in_your_think", "headache", 
-          "altered_personality_behavi", "limb_weakness", "problems_with_balance", "can_t_move_and_or_feel_one", "problems_seeing", 
-          "tingling_feeling_pins_and", "can_t_fully_move_or_contro", "tremor_shakiness", "seizures")
+neuro = c(
+  "loss_of_sense_of_smell", "loss_of_taste", "confusion_fuzzy_head", "difficulty_with_communicat", 
+  "difficulty_with_concentrat", "short_term_memory_loss", "physical_slowing_down", "slowing_down_in_your_think", "headache", 
+  "altered_personality_behavi", "limb_weakness", "problems_with_balance", "can_t_move_and_or_feel_one", "problems_seeing", 
+  "tingling_feeling_pins_and", "can_t_fully_move_or_contro", "tremor_shakiness", "seizures")
 musculoskeletal = c("aching_in_your_muscles_pai", "joint_pain_or_swelling")
 cardiorespiratory = c("leg_ankle_swelling", "chest_pain", "chest_tightness", "pain_on_breathing", "palpitations", 
                       "dizziness_or_lightheadness", "fainting_blackouts")
@@ -1090,12 +953,14 @@ gastrointestinal_genitourinary = c("diarrhoea", "constipation", "nausea_vomiting
                                    "loss_of_control_of_passing", "loss_of_control_of_opening", "weight_loss", "stomach_pain", 
                                    "psq_symp_ed", "skin_rash", "lumpy_lesions_purple_pink", "bleeding")
 
-all_symptoms = c(cardiorespiratory, gastrointestinal_genitourinary, neuro, musculoskeletal)
+all_symptoms = c("symptom_any",
+                 "symptom_count",
+                 cardiorespiratory, gastrointestinal_genitourinary, neuro, musculoskeletal)
 
 dependent = "no_comorbid_2levels"
 
 phosp_3m %>% 
-  mutate(across(all_symptoms, ~ fct_relevel(.x, "No"))) %T>%
+  mutate(across(c(all_symptoms, -c(symptom_count, symptom_any)), ~ fct_relevel(.x, "No"))) %T>%
   {data_in <<- .} %>% 
   summary_factorlist(dependent,  all_symptoms, 
                      total_col = TRUE) %>% 
@@ -1296,6 +1161,271 @@ phosp_3m %>%
                      na_include = TRUE, na_include_dependent = TRUE,
                      total_col = TRUE) %>% 
   mytable()
+```
+
+
+## Old figures
+
+```{r}
+phosp_hosp %>% 
+  select(eq5d5l_summary_delta, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  ggplot_lancet(aes(fct_rev(crf1a_resp_support_4levels), eq5d5l_summary_delta, 
+                    fill = fct_rev(crf1a_resp_support_4levels))) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "ESQ5d VAS change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+```{r}
+phosp_3m %>% 
+  select(crf1a_resp_support_4levels, matches("psq_scale_.*_delta$")) %>%
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  drop_na(value) %>% 
+  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  facet_wrap(~ crf1a_resp_support_4levels) +
+  #scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "WG-SS change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+
+```{r}
+phosp_3m %>% 
+  select(crf1a_resp_support_4levels, matches("patient_sq_l_t_.*delta$")) %>%
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  drop_na(value) %>% 
+  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
+  geom_boxplot() + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+  facet_wrap(~ crf1a_resp_support_4levels) +
+  #scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "WG-SS change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+Not much data in some of these:
+
+```{r}
+phosp_3m %>% count(patient_sq_l_t_communicate_delta, crf1a_resp_support_4levels) %>% data.frame()
+```
+
+
+```{r}
+phosp_3m %>% 
+  select(crf1a_resp_support_4levels, matches("eq5d5l_q.*_delta$")) %>%
+  gather("key", "value", -crf1a_resp_support_4levels) %>% 
+  drop_na(value) %>% 
+  
+  ggplot_lancet(aes(fct_rev(key), value, fill = fct_rev(key))) + 
+  geom_boxplot(outlier.shape = NA) + 
+  geom_hline(yintercept = 0) +
+  coord_flip() +
+    facet_wrap(~ crf1a_resp_support_4levels) +
+  #scale_y_continuous(limits = c(-60, 60)) +
+  labs(x = "", y = "EQ5D change") +
+  theme(legend.position = "none",
+        axis.line.x = element_blank(),
+        axis.ticks.x = element_blank()
+  )
+```
+
+## Figure
+
+Updated to now just two comorbidity levels
+
+```{r fig.height=6, fig.width=10}
+plot_data = phosp_hosp %>% 
+  mutate(
+    age_admission_factor = case_when(
+      # age_admission < 20 ~ "<20",
+      # age_admission < 30 ~ "20-29",
+      # age_admission < 40 ~ "30-39",
+      age_admission < 50 ~ "<50",
+      age_admission < 60 ~ "50-59",
+      age_admission < 70 ~ "60-69",
+      # age_admission < 80 ~ "70-79",
+      # age_admission < 90 ~ "80-89",
+      is.na(age_admission) ~ NA_character_,
+      TRUE ~ "70+"
+    ),
+    no_comorbid_3levels = case_when(
+      no_comorbid == 0 ~ "No comorbidity",
+      no_comorbid > 0  ~ "Comorbidity", 
+    ) %>% 
+      factor() %>% 
+      fct_relevel("No comorbidity")
+  ) %>% 
+  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  group_by(age_admission_factor, no_comorbid_3levels, crf1a_resp_support_4levels) %>% 
+  count(psq_recovered) %>% 
+  mutate(nn = sum(n),
+         prop = 100 * n / nn) %>% 
+  filter(psq_recovered == "No") %>% 
+  mutate(
+    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[2],
+    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[3]
+  )
+
+plot_data %>% 
+  ggplot_lancet() +
+  geom_point(position = position_dodge(0.5), 
+             aes(x = fct_rev(age_admission_factor), y = prop)) +
+  geom_pointrange(position = position_dodge(0.5),
+                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax)) +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+  coord_flip() + 
+  scale_colour_brewer(palette = "Set1") + 
+  guides(colour = guide_legend(reverse = TRUE)) +
+  theme(legend.position = "top") +
+  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
+  ggtitle("Proportion not recovered from COVID-19",
+          paste0("N = ", total_n))
+```
+
+```{r fig.height=6, fig.width=10}
+plot_data = phosp_hosp %>% 
+  mutate(
+    age_admission_factor = case_when(
+      # age_admission < 20 ~ "<20",
+      # age_admission < 30 ~ "20-29",
+      # age_admission < 40 ~ "30-39",
+      age_admission < 50 ~ "<50",
+      age_admission < 60 ~ "50-59",
+      # age_admission < 70 ~ "60-69",
+      # age_admission < 80 ~ "70-79",
+      # age_admission < 90 ~ "80-89",
+      is.na(age_admission) ~ NA_character_,
+      TRUE ~ "60+"
+    ),
+    no_comorbid_3levels = case_when(
+      no_comorbid == 0 ~ "No comorbidity",
+      no_comorbid > 0  ~ "Comorbidity", 
+    ) %>% 
+      factor() %>% 
+      fct_relevel("No comorbidity")
+  ) %>% 
+  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  group_by(age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  count(psq_recovered) %>% 
+  mutate(nn = sum(n),
+         prop = 100 * n / nn) %>% 
+  filter(psq_recovered == "No") %>% 
+  mutate(
+    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[2],
+    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[3]
+  )
+
+plot_data %>% 
+  ggplot_lancet() +
+  geom_point(position = position_dodge(0.5), 
+             aes(x = fct_rev(age_admission_factor), y = prop, 
+                 colour = fct_rev(crf1a_sex))) +
+  geom_pointrange(position = position_dodge(0.5),
+                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax,
+                      colour = fct_rev(crf1a_sex))) +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+  coord_flip() + 
+  scale_colour_brewer(palette = "Set1") + 
+  guides(colour = guide_legend(reverse = TRUE)) +
+  theme(legend.position = "top") +
+  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
+  ggtitle("Proportion not recovered from COVID-19",
+          paste0("N = ", total_n))
+
+```
+
+
+```{r eval=FALSE, fig.height=6, fig.width=10, include=FALSE}
+plot_data = phosp_hosp %>% 
+  mutate(
+    age_admission_factor = case_when(
+      # age_admission < 20 ~ "<20",
+      # age_admission < 30 ~ "20-29",
+      # age_admission < 40 ~ "30-39",
+      age_admission < 50 ~ "<50",
+      age_admission < 60 ~ "50-59",
+      age_admission < 70 ~ "60-69",
+      # age_admission < 80 ~ "70-79",
+      # age_admission < 90 ~ "80-89",
+      is.na(age_admission) ~ NA_character_,
+      TRUE ~ "70+"
+    )
+  ) %>% 
+  select(psq_recovered, age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  group_by(age_admission_factor, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  count(psq_recovered) %>% 
+  mutate(nn = sum(n),
+         prop = 100 * n / nn) %>% 
+  filter(psq_recovered == "No") %>% 
+  mutate(
+    ymin = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[2],
+    ymax = 100 * Hmisc::binconf(n, nn, alpha=0.05,
+                                method=c("wilson"))[3]
+  )
+
+plot_data %>% 
+  ggplot_lancet() +
+  geom_point(position = position_dodge(0.5), 
+             aes(x = fct_rev(age_admission_factor), y = prop, 
+                 colour = fct_rev(crf1a_sex))) +
+  geom_pointrange(position = position_dodge(0.5),
+                  aes(x = fct_rev(age_admission_factor), y = prop, ymin = ymin, ymax = ymax,
+                      colour = fct_rev(crf1a_sex))) +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) +
+  coord_flip() + 
+  scale_colour_brewer(palette = "Set1") + 
+  guides(colour = guide_legend(reverse = TRUE)) +
+  theme(legend.position = "top") +
+  labs(x = "Age on admission (y)", y = "Proportion not recovered (%)", colour = "Sex") +
+  ggtitle("Proportion not recovered from COVID-19",
+          paste0("N = ", total_n))
+
+```
+
+## Figure: overall VAS change stratified
+
+```{r fig.height=6, fig.width=10}
+phosp_hosp %>% 
+  select(eq5d5l_summary_delta, age_admission, no_comorbid_3levels, crf1a_sex, crf1a_resp_support_4levels) %>% 
+  drop_na() %T>% 
+  {total_n <<- dim(.)[[1]]} %>% 
+  ggplot_lancet(aes(age_admission, eq5d5l_summary_delta)) + 
+  geom_point(alpha = 0.2) +
+  geom_smooth(method = "gam", formula = y ~ s(x, bs = "cr") ) + 
+  scale_color_brewer(palette = "Set1") +
+  facet_grid(no_comorbid_3levels ~ crf1a_resp_support_4levels) + 
+  labs(x = "Age on admission (y)", y = "EQ5D VAS change", colour = "Sex") +
+  ggtitle("Change in ES5D VAS 3 months vs pre-covid",
+          paste0("N = ", total_n))
 ```
 
 
