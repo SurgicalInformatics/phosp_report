@@ -86,10 +86,6 @@ phosp_wt = phosp_wt %>%
 # Any joins can be temporarily done here, then moved to cleaning. 
 phosp_hosp = phosp_hosp %>% 
   left_join(phosp %>% select(study_id, crf3a_bmi) %>% drop_na() %>% distinct(study_id, .keep_all = TRUE))
-
-# phosp_hosp = phosp_hosp %>%
-#   left_join(phosp_3m %>% select(study_id, eq5d5l_summary_delta, psq_recovered))
-
 ```
 
 ```{r}
@@ -159,7 +155,7 @@ phosp_3m %>%
 ```
 
 
-```{r}
+```{r fig.height=6, fig.width=8}
 # Normalise
 library(recipes)
 set.seed(1234)
@@ -172,9 +168,10 @@ clara_result = phosp_3m %>%
   step_normalize(all_numeric()) %>% 
   prep() %>% 
   juice() %>% 
-  mutate(across(c(mocal_total, sppb_score), ~ . * -1)) %>% 
+  mutate(across(c(mocal_total, sppb_score), ~ . * -1)) %>%     # Reverse scale for these
   clara(4, samples = 50,  pamLike = TRUE, metric = "euclidean")
 clara_result
+# plot(clara_result)
 
 clara_result$medoids %>% 
   as_tibble() %>% 
