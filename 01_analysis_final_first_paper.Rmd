@@ -10,6 +10,8 @@ output:
     toc: yes
     toc_depth: 3
     toc_float: yes
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -105,11 +107,11 @@ phosp_wt = phosp_wt %>%
 ```{r}
 # Any joins can be temporarily done here, then moved to cleaning. 
 phosp_hosp = phosp_hosp %>% 
-  left_join(phosp %>% select(study_id, crf3a_bmi) %>% drop_na() %>% distinct(study_id, .keep_all = TRUE))
-
-# phosp_hosp = phosp_hosp %>%
-#   left_join(phosp_3m %>% select(study_id, eq5d5l_summary_delta, psq_recovered))
-
+  left_join(phosp %>% 
+              filter(redcap_event_name == "3 Months (1st Research Visit)") %>% 
+              select(study_id, crf3a_bmi, crf3a_bmi_2levels, crf3a_bmi_5levels) %>% 
+              drop_na(crf3a_bmi)
+  )
 ```
 
 ```{r}
@@ -182,6 +184,9 @@ explanatory = c("swab_pcr_result",
                 "crf1b_eth_5levels", 
                 "imd_quintile",
                 "crf3a_bmi",
+                "crf3a_bmi_2levels",
+                "crf3a_bmi_5levels", 
+                
                 "patient_sq_n",
                 
                 # Comorbidities
@@ -200,8 +205,8 @@ explanatory = c("swab_pcr_result",
 dependent = "crf1a_resp_support_4levels"
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory, 
-                     na_include = TRUE, na_include_dependent = TRUE, cont = "median",
-                     add_col_totals = TRUE, 
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, cont_nonpara = c(2, 4:20), p = TRUE, 
                      total_col = TRUE) %>% 
   ff_remove_ref() %>% 
   ff_column_totals(phosp_hosp, dependent) %>% 
@@ -228,6 +233,8 @@ Variable labels can be fixed here.
 explanatory_differences = c("psq_recovered",
                             "eq5d5l_summary_pre",
                             "eq5d5l_summary",
+                            "eq5d5l_summary_delta",
+                            "eq5d5l_summary_delta_change",
                             # Pull delta_change names
                             phosp %>% 
                               select(matches("eq5d5l_q.*_delta_change")
@@ -436,8 +443,8 @@ phosp_3m %>%
 dependent = "psq_recovered"
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory, 
-                     na_include = TRUE, na_include_dependent = TRUE, cont = "median",
-                     add_col_totals = TRUE, 
+                     na_include = TRUE, na_include_dependent = TRUE, 
+                     add_col_totals = TRUE, cont_nonpara = c(2, 4:20),
                      total_col = TRUE) %>% 
   ff_remove_ref() %>% 
   ff_column_totals(phosp_hosp, dependent) %>% 
@@ -455,6 +462,7 @@ library(purrr)
 
 ```{r eval=FALSE, include=FALSE}
 # Run mice
+# set.seed(1)
 explanatory = c("age_admission", 
                 "crf1a_sex", 
                 "crf1b_eth_5levels", 
@@ -503,6 +511,7 @@ saveRDS(phosp_hosp_imputed, file = "phosp_hosp_imputed_160321.rds")
 ```{r}
 # Load mice sets
 phosp_hosp_imputed = readRDS("phosp_hosp_imputed_160321.rds")
+# phosp_hosp_imputed = readRDS("phosp_hosp_imputed_210321.rds")
 ```
 
 
@@ -601,6 +610,115 @@ fit = phosp_hosp %>%
           dependent_label = "Recovered",
           breaks = c(0.2, 0.5, 1, 2, 5, 10, 30), )
 ```
+
+
+
+
+
+## Table 6C: Multivariable logistic regression (with BMI 2 levels)
+
+```{r}
+## Decide about metrcs later
+dependent = "psq_recovered"
+explanatory = c("age_admission_factor", "crf1a_sex", "crf1b_eth_5levels", "imd_quintile", "no_comorbid_3levels", "crf3a_bmi_2levels", "crf1a_resp_support_4levels", "crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
+explanatory_multi = c("age_admission", "crf1a_sex", "crf1b_eth_5levels", "imd_quintile", "no_comorbid_3levels")
+
+fit_cc = phosp_hosp %>% 
+  finalfit(dependent, explanatory, keep_fit_id = TRUE)
+
+fit_multi_imputed_pool = phosp_hosp_imputed %>% 
+  mice::complete("all") %>%
+  # Probably temp. Add age_admission_factor to imputed datasets
+  purrr::map(~ mutate(., 
+               age_admission_factor = case_when(
+                 age_admission < 30 ~ "<30",
+                 age_admission < 40 ~ "30-39",
+                 age_admission < 50 ~ "40-49",
+                 age_admission < 60 ~ "50-59",
+                 age_admission < 70 ~ "60-69",
+                 age_admission < 80 ~ "70-79",
+                 is.na(age_admission) ~ NA_character_,
+                 TRUE ~ "80+"
+               ) %>% 
+                 fct_relevel("50-59"),
+               
+               crf3a_bmi_2levels = case_when(
+                 crf3a_bmi < 30 ~ "BMI < 30 kg/m^2",
+                 is.na(crf3a_bmi) ~ NA_character_,
+                 TRUE ~ "BMI 30+ kg/m^2"
+               ) %>% 
+                 factor() %>% 
+                 fct_relevel("BMI < 30 kg/m^2", "BMI 30+ kg/m^2") %>% 
+                 ff_label("BMI (2 levels)"),
+  )) %>% 
+  purrr::map(~ glmmulti(.x, dependent, explanatory)) %>%
+  as.mira() %>% 
+  pool()
+
+
+# Multilevel
+library(broom.mixed)
+fit_mixed_imputed_pool = phosp_hosp_imputed %>% 
+  mice::complete("all") %>%
+  # Probably temp. Add age_admission_factor to imputed datasets
+  purrr::map(~ mutate(., 
+               age_admission_factor = case_when(
+                 age_admission < 30 ~ "<30",
+                 age_admission < 40 ~ "30-39",
+                 age_admission < 50 ~ "40-49",
+                 age_admission < 60 ~ "50-59",
+                 age_admission < 70 ~ "60-69",
+                 age_admission < 80 ~ "70-79",
+                 is.na(age_admission) ~ NA_character_,
+                 TRUE ~ "80+"
+               ) %>% 
+                 fct_relevel("50-59"),
+               
+               crf3a_bmi_2levels = case_when(
+                 crf3a_bmi < 30 ~ "BMI < 30 kg/m^2",
+                 is.na(crf3a_bmi) ~ NA_character_,
+                 TRUE ~ "BMI 30+ kg/m^2"
+               ) %>% 
+                 factor() %>% 
+                 fct_relevel("BMI < 30 kg/m^2", "BMI 30+ kg/m^2") %>% 
+                 ff_label("BMI (2 levels)"),
+  )) %>% 
+  purrr::map(~ glmmixed(.x, dependent, explanatory, random_effect = "redcap_data_access_group")) %>%
+  as.mira() %>% 
+  pool()
+
+fit_multi_imputed = fit_multi_imputed_pool%>% 
+  fit2df(estimate_name = "OR (multivariable imputation)", exp = TRUE)
+
+fit_mixed_imputed = fit_mixed_imputed_pool%>% 
+  fit2df(estimate_name = "OR (multilevel imputation)", exp = TRUE)
+  
+fit_cc %>% 
+  # ff_merge(fit_uni_imputed) %>% 
+  ff_merge(fit_multi_imputed) %>% 
+  ff_merge(fit_mixed_imputed, last_merge = TRUE) %>% 
+  # dplyr::relocate(1, 2, 3, 4, 5, 7, 6, 8) %>% 
+  mytable()
+```
+
+
+## Figure: Multivariable logistic regression (multiple imputation) (with BMI 2 level) 
+
+```{r fig.height=7, fig.width=12}
+dependent = "psq_recovered"
+explanatory = c("age_admission_factor", "crf1a_sex", "crf1b_eth_5levels", "imd_quintile", "no_comorbid_3levels",
+                "crf3a_bmi_2levels",
+                "crf1a_resp_support_4levels", "crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
+
+fit = phosp_hosp %>%
+  or_plot(dependent, explanatory, column_space = c(-0.5, 0.15, 0.5), table_text_size = 4, 
+          glmfit = fit_mixed_imputed_pool,
+          dependent_label = "", suffix = "",
+          breaks = c(0.2, 0.5, 1, 2, 5, 10, 30), )
+# PDF 10 x 9
+```
+
+
 
 ## Table 8: Recovered vs EQ5D
 
@@ -749,7 +867,7 @@ p2 = phosp_3m %>%
   scale_fill_brewer("", palette = "Blues") +
   labs(y = "Proportion (%)", x = "") +
   facet_wrap(. ~ crf1a_resp_support_4levels) +
-  theme(legend.position = c(1, 1.2),
+  theme(legend.position = c(1, 1.25),
         legend.background = element_blank()) +
   ggtitle("Change in EQ5D domain (stratified)",
           " ")
@@ -764,9 +882,10 @@ p3 = phosp_3m %>%
            )
   ) %>% 
   ggplot_lancet(aes(x = "", y = value)) + 
-  geom_boxplot2(aes(fill = key), outlier.shape = NA, width.errorbar = 0) + 
- geom_jitter(width = 0.4, alpha = 0.05) +
+  geom_boxplot(aes(fill = key), width.errorbar = 0) + 
+  # geom_jitter(width = 0.4, alpha = 0.05) +
   geom_hline(yintercept = 0) +
+  scale_y_continuous(expand = c(0.1, 0)) +
   coord_flip() +
   labs(x = "", y = "") +
   facet_grid(. ~ key, scale = "free_x") + 
@@ -785,9 +904,10 @@ p4 = phosp_3m %>%
            )
   ) %>% 
   ggplot_lancet(aes(x = fct_rev(crf1a_resp_support_4levels), y = value)) + 
-  geom_boxplot2(aes(fill = key), outlier.shape = NA, width.errorbar = 0) + 
+  geom_boxplot(aes(fill = key), width.errorbar = 0) + 
   # geom_jitter(width = 0.2, alpha = 0.2) +
   geom_hline(yintercept = 0) +
+  scale_y_continuous(expand = c(0.1, 0)) +
   coord_flip() +
   labs(x = "", y = "") +
   facet_grid(. ~ key, scale = "free_x") + 
@@ -874,13 +994,14 @@ Labels can be sorted.
 
 ```{r}
 explanatory_wss = phosp_3m %>% 
-  select("patient_sq_l_t__new_disability", matches("patient_sq_l_t_.*_delta_change"), matches("psq_scale_.*_delta_change")) %>% 
+  select("patient_sq_l_t__new_disability", 
+         matches("patient_sq_l_t_.*_delta_change"), matches("psq_scale_.*_delta_change")) %>%
   names()
 
 phosp_3m %>% 
   summary_factorlist(dependent,  explanatory_wss, 
                      na_include = TRUE,
-                     add_col_totals = TRUE, 
+                     add_col_totals = TRUE, p = TRUE,
                      total_col = TRUE) %>% 
   mytable()
 ```
@@ -962,7 +1083,7 @@ dependent = "no_comorbid_2levels"
 phosp_3m %>% 
   mutate(across(c(all_symptoms, -c(symptom_count, symptom_any)), ~ fct_relevel(.x, "No"))) %T>%
   {data_in <<- .} %>% 
-  summary_factorlist(dependent,  all_symptoms, 
+  summary_factorlist(dependent,  all_symptoms, cont = "median",
                      total_col = TRUE) %>% 
   ff_remove_ref() %>% 
   ff_column_totals(data_in, dependent) %>% 

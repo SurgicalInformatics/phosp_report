@@ -6,7 +6,7 @@ output:
     toc: yes
     toc_depth: '3'
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 
@@ -85,7 +85,11 @@ phosp_wt = phosp_wt %>%
 ```{r}
 # Any joins can be temporarily done here, then moved to cleaning. 
 phosp_hosp = phosp_hosp %>% 
-  left_join(phosp %>% select(study_id, crf3a_bmi) %>% drop_na() %>% distinct(study_id, .keep_all = TRUE))
+  left_join(phosp %>% 
+              filter(redcap_event_name == "3 Months (1st Research Visit)") %>% 
+              select(study_id, crf3a_bmi, crf3a_bmi_2levels, crf3a_bmi_5levels) %>% 
+              drop_na(crf3a_bmi)
+  )
 ```
 
 ```{r}
@@ -126,7 +130,7 @@ phosp_smoking = phosp_3m %>%
 
 phosp_hosp = phosp_hosp %>% 
   left_join(phosp_smoking) %>% 
-    mutate(patient_sq_n = ff_label(patient_sq_n, "Smoking"))
+  mutate(patient_sq_n = ff_label(patient_sq_n, "Smoking"))
 ```
 
 
@@ -178,21 +182,35 @@ clara_result$medoids %>%
   mutate(cluster = (1:max(row_number()) %>% factor())) %>% 
   gather("key", "value", -cluster) %>% 
   mutate(key = factor(key) %>% 
-           fct_relevel("gad7_summary",
-             "phq9_summary",
-             "pcl5_summary",
-             "dyspnoea12_summary",
-             "facit_item_total",
-             "mocal_total")
-           ) %>% 
+           fct_recode(
+             "Anxiety (GAD7)" = "gad7_summary",
+             "Depression (PHQ7)" = "phq9_summary",
+             "PTSD (PCL5)" = "pcl5_summary",
+             "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+             "Fatigue (FACIT)" = "facit_item_total",
+             "Physical Performance (SPPB)" = "sppb_score",
+             "Cognition (MoCA)" = "mocal_total") %>% 
+           fct_relevel(
+             "Anxiety (GAD7)",
+             "Depression (PHQ7)",
+             "PTSD (PCL5)",
+             "Breathlessness (Dyspnoea-12)",
+             "Fatigue (FACIT)",
+             "Physical Performance (SPPB)",
+             "Cognition (MoCA)"
+           )
+  ) %>% 
+  
   ggplot_lancet(aes(x = fct_rev(key), y = value, colour = cluster, group = cluster)) +
   geom_line(stat = "identity") +
   geom_hline(yintercept = 0, linetype = 2) +
   coord_flip() +
-  scale_colour_brewer(palette = "Set1") + 
-  labs(x = "", y = "Z-score (high is more deficit)")
+  scale_colour_brewer("Cluster", palette = "Set1") + 
+  labs(x = "", y = "Z-score (high is more deficit)") +
+  ggtitle("Cluster centres (medoids) for symptom questionnaires",
+          "Normalised scale (z-scores)")
 ```
-  
+
 ```{r}
 phosp_cluster = data_in %>% 
   mutate(cluster = clara_result$clustering %>% 
@@ -206,8 +224,48 @@ phosp_cluster = data_in %>%
   select(study_id, cluster)
 
 ```
-  
-  
+
+## Cluster medoids (z-scores)  
+
+```{r}
+clara_result$medoids %>%
+  as_tibble() %>% 
+  mutate(
+    Cluster = 1:4
+  ) %>% 
+  rename(
+    "Anxiety (GAD7)" = "gad7_summary",
+    "Depression (PHQ7)" = "phq9_summary",
+    "PTSD (PCL5)" = "pcl5_summary",
+    "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+    "Fatigue (FACIT)" = "facit_item_total",
+    "Physical Performance (SPPB)" = "sppb_score",
+    "Cognition (MoCA)" = "mocal_total"
+  ) %>% 
+  relocate("Cluster") %>% 
+  mytable()
+```
+
+## Cluster characteristics  
+
+```{r}
+clara_result$clusinfo %>%
+  as_tibble() %>% 
+  mutate(
+    Cluster = 1:4
+  ) %>% 
+  rename(
+    "Size" = "size",
+    "Maximal dissimilarity" = "max_diss",
+    "Average dissimilarity" = "av_diss",
+    "Isolation" = "isolation"
+  ) %>% 
+  relocate("Cluster") %>% 
+  mytable()
+```
+
+
+
 ```{r moca, fig.height=6, fig.width=8}
 explanatory_hrqol = c(
   "gad7_summary",
@@ -226,7 +284,7 @@ scales_y = list(
   scale_y_continuous(),
   scale_y_continuous(),
   scale_y_reverse()
-  )
+)
 
 scales_x = list(
   scale_x_reverse(), 
@@ -235,7 +293,7 @@ scales_x = list(
   scale_x_reverse(), 
   scale_x_reverse(), 
   scale_x_reverse()
-  )
+)
 
 # MOCA
 phosp_3m %>% 
@@ -249,9 +307,9 @@ phosp_3m %>%
         "Anxiety (GAD7)" = "gad7_summary",
         "Depression (PHQ7)" = "phq9_summary",
         "PTSD (PCL5)" = "pcl5_summary",
-        "Dyspnoea 12" = "dyspnoea12_summary",
-        "Function (FACIT)" = "facit_item_total",
-        "Physical (SPPB)" = "sppb_score",
+        "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+        "Fatigue (FACIT)" = "facit_item_total",
+        "Physical Performance (SPPB)" = "sppb_score"
       )
   ) %>% 
   ggplot_lancet(aes(mocal_total, value, colour = cluster)) +
@@ -259,7 +317,7 @@ phosp_3m %>%
   xlim(c(10, NA)) +
   # scale_x_reverse() +
   scale_colour_brewer(palette = "Set1") + 
-  labs(x = "Cognition (MOCA)", colour = "") +
+  labs(x = "Cognition (MoCA)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
   facetted_pos_scales(y = scales_y, x = scales_x) + 
   theme(
@@ -267,8 +325,9 @@ phosp_3m %>%
   ) +
   guides(colour = guide_legend(title.position = "top",
                                nrow = 2)) + 
-  ggtitle("Symptom instruments by MOCA",
-          " ")
+  ggtitle("",
+          "")
+# PDF 11 x 7
 ```
 
 
@@ -281,7 +340,7 @@ scales = list(
   scale_y_continuous(),
   scale_y_continuous(),
   scale_y_reverse()
-  )
+)
 
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
@@ -291,13 +350,13 @@ phosp_3m %>%
   mutate(
     key = factor(key) %>% 
       fct_recode(
-        # "Anxiety (GAD7)" = "gad7_summary",
+        #"Anxiety (GAD7)" = "gad7_summary",
         "Depression (PHQ7)" = "phq9_summary",
         "PTSD (PCL5)" = "pcl5_summary",
-        "Dyspnoea 12" = "dyspnoea12_summary",
-        "Function (FACIT)" = "facit_item_total",
-        "Physical (SPPB)" = "sppb_score", 
-        "Cognition (MOCA)" = "mocal_total"
+        "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+        "Fatigue (FACIT)" = "facit_item_total",
+        "Physical Performance (SPPB)" = "sppb_score",
+        "Cognition (MoCA)" = "mocal_total"
       )
   ) %>% 
   ggplot_lancet(aes(gad7_summary, value, colour = cluster)) +
@@ -325,7 +384,7 @@ scales = list(
   scale_y_reverse(),
   scale_y_continuous(),
   scale_y_reverse()
-  )
+)
 
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
@@ -336,12 +395,12 @@ phosp_3m %>%
     key = factor(key) %>% 
       fct_recode(
         "Anxiety (GAD7)" = "gad7_summary",
-        #"Depression (PHQ7)" = "phq9_summary",
+        # "Depression (PHQ7)" = "phq9_summary",
         "PTSD (PCL5)" = "pcl5_summary",
-        "Dyspnoea 12" = "dyspnoea12_summary",
-        "Function (FACIT)" = "facit_item_total",
-        "Physical (SPPB)" = "sppb_score", 
-        "Cognition (MOCA)" = "mocal_total"
+        "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+        "Fatigue (FACIT)" = "facit_item_total",
+        "Physical Performance (SPPB)" = "sppb_score",
+        "Cognition (MoCA)" = "mocal_total"
       )
   ) %>% 
   ggplot_lancet(aes(phq9_summary, value, colour = cluster)) +
@@ -370,7 +429,7 @@ scales = list(
   scale_y_reverse(),
   scale_y_continuous(),
   scale_y_reverse()
-  )
+)
 
 phosp_3m %>% 
   left_join(phosp_cluster) %>% 
@@ -382,11 +441,11 @@ phosp_3m %>%
       fct_recode(
         "Anxiety (GAD7)" = "gad7_summary",
         "Depression (PHQ7)" = "phq9_summary",
-        #"PTSD (PCL5)" = "pcl5_summary",
-        "Dyspnoea 12" = "dyspnoea12_summary",
-        "Function (FACIT)" = "facit_item_total",
-        "Physical (SPPB)" = "sppb_score", 
-        "Cognition (MOCA)" = "mocal_total"
+        # "PTSD (PCL5)" = "pcl5_summary",
+        "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+        "Fatigue (FACIT)" = "facit_item_total",
+        "Physical Performance (SPPB)" = "sppb_score",
+        "Cognition (MoCA)" = "mocal_total"
       )
   ) %>% 
   ggplot_lancet(aes(pcl5_summary, value, colour = cluster)) +
@@ -413,7 +472,7 @@ scales = list(
   scale_y_continuous(),
   scale_y_continuous(),
   scale_y_reverse()
-  )
+)
 
 
 phosp_3m %>% 
@@ -427,16 +486,16 @@ phosp_3m %>%
         "Anxiety (GAD7)" = "gad7_summary",
         "Depression (PHQ7)" = "phq9_summary",
         "PTSD (PCL5)" = "pcl5_summary",
-        # "Dyspnoea 12" = "dyspnoea12_summary",
-        "Function (FACIT)" = "facit_item_total",
-        "Physical (SPPB)" = "sppb_score", 
-        "Cognition (MOCA)" = "mocal_total"
+        # "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+        "Fatigue (FACIT)" = "facit_item_total",
+        "Physical Performance (SPPB)" = "sppb_score",
+        "Cognition (MoCA)" = "mocal_total"
       )
   ) %>% 
   ggplot_lancet(aes(dyspnoea12_summary, value, colour = cluster)) +
   geom_jitter(alpha = 0.5) + 
   scale_colour_brewer(palette = "Set1") + 
-  labs(x = "Dyspnoea 12", colour = "") +
+  labs(x = "Breathlessness (Dyspnoea-12)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
   facetted_pos_scales(y = scales) + 
   theme(
@@ -457,7 +516,7 @@ scales = list(
   scale_y_continuous(),
   scale_y_continuous(),
   scale_y_reverse()
-  )
+)
 
 
 
@@ -472,16 +531,16 @@ phosp_3m %>%
         "Anxiety (GAD7)" = "gad7_summary",
         "Depression (PHQ7)" = "phq9_summary",
         "PTSD (PCL5)" = "pcl5_summary",
-        "Dyspnoea 12" = "dyspnoea12_summary",
-        # "Function (FACIT)" = "facit_item_total",
-        "Physical (SPPB)" = "sppb_score", 
-        "Cognition (MOCA)" = "mocal_total"
+        "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+        #"Fatigue (FACIT)" = "facit_item_total",
+        "Physical Performance (SPPB)" = "sppb_score",
+        "Cognition (MoCA)" = "mocal_total"
       )
   ) %>% 
   ggplot_lancet(aes(facit_item_total, value, colour = cluster)) +
   geom_jitter(alpha = 0.5) + 
   scale_colour_brewer(palette = "Set1") + 
-  labs(x = "Function (FACIT)", colour = "") +
+  labs(x = "Fatigue (FACIT)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
   facetted_pos_scales(y = scales) + 
   theme(
@@ -502,7 +561,7 @@ scales_y = list(
   scale_y_reverse(),
   scale_y_continuous(),
   scale_y_continuous()
-  )
+)
 
 scales_x = list(
   scale_x_reverse(), 
@@ -511,7 +570,7 @@ scales_x = list(
   scale_x_reverse(), 
   scale_x_reverse(), 
   scale_x_reverse()
-  )
+)
 
 
 phosp_3m %>% 
@@ -525,17 +584,17 @@ phosp_3m %>%
         "Anxiety (GAD7)" = "gad7_summary",
         "Depression (PHQ7)" = "phq9_summary",
         "PTSD (PCL5)" = "pcl5_summary",
-        "Dyspnoea 12" = "dyspnoea12_summary",
-        "Function (FACIT)" = "facit_item_total",
-        # "Physical (SPPB)" = "sppb_score", 
-        "Cognition (MOCA)" = "mocal_total"
+        "Breathlessness (Dyspnoea-12)" = "dyspnoea12_summary",
+        "Fatigue (FACIT)" = "facit_item_total",
+        # "Physical Performance (SPPB)" = "sppb_score",
+        "Cognition (MoCA)" = "mocal_total"
       )
   ) %>% 
   ggplot_lancet(aes(sppb_score, value, colour = cluster)) +
   geom_jitter(alpha = 0.5) + 
   #scale_x_reverse() +
   scale_colour_brewer(palette = "Set1") + 
-  labs(x = "Physical (SPPB)", colour = "") +
+  labs(x = "Physical Performance (SPPB)", colour = "") +
   facet_wrap(. ~ key, scale = "free_y") +
   facetted_pos_scales(x = scales_x, y = scales_y) + 
   theme(
@@ -557,6 +616,9 @@ explanatory = c("swab_pcr_result",
                 "crf1b_eth_5levels", 
                 "imd_quintile",
                 "crf3a_bmi",
+                "crf3a_bmi_2levels",
+                "crf3a_bmi_5levels", 
+                
                 "patient_sq_n",
                 
                 # Comorbidities
@@ -582,8 +644,8 @@ dependent = "cluster"
 phosp_hosp %>% 
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory, 
-                     na_include = TRUE, cont = "median", p = TRUE,
-                     add_col_totals = TRUE, column = FALSE,
+                     na_include = TRUE, p = TRUE,
+                     add_col_totals = TRUE, column = FALSE, cont_nonpara = c(2, 4:20),
                      total_col = TRUE) %>% 
   mytable()
 ```
@@ -594,7 +656,7 @@ phosp_hosp %>%
 phosp_hosp %>% 
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory, 
-                     na_include = TRUE, cont = "median", p = TRUE,
+                     na_include = TRUE, p = TRUE, cont_nonpara = c(2, 4:20),
                      add_col_totals = TRUE, column = TRUE,
                      total_col = TRUE) %>% 
   mytable()
@@ -676,7 +738,7 @@ phosp_pft_table = phosp %>%
          "pft_fvc_perc_pred",
          "pft_fvc",
          "pft_fvc_perc_pred_80",
-           "pft_fev1_fvc_70") %>% 
+         "pft_fev1_fvc_70") %>% 
   as.data.frame() %>% 
   ff_relabel_df(phosp)
 
@@ -697,7 +759,7 @@ phosp_kco_table = phosp %>%
       pft_tlco_pred >= 80 ~ "No",
     ) %>% 
       ff_label("TLCO predicted <80%"),
-      
+    
     pft_kco_pred_80 = case_when(
       pft_kco_pred < 80 ~ "Yes",
       pft_kco_pred >= 80 ~ "No",
@@ -725,13 +787,13 @@ phosp_bloods_table = phosp %>%
     bnp_result = ifelse(all(is.na(bnp_result)), NA, max(bnp_result, na.rm = TRUE)),
     pnbnp_result = ifelse(all(is.na(pnbnp_result)), NA, max(pnbnp_result, na.rm = TRUE)),
     bnp_summary = ifelse(any(bnp_summary == "Yes", na.rm = TRUE), "Yes", 
-                          ifelse(any(bnp_summary == "No", na.rm = TRUE), "No", 
-                                 NA)),
+                         ifelse(any(bnp_summary == "No", na.rm = TRUE), "No", 
+                                NA)),
     
     hba1c_result = ifelse(all(is.na(hba1c_result)), NA, max(hba1c_result, na.rm = TRUE)),
     hba1c_summary = ifelse(any(hba1c_summary == "Yes", na.rm = TRUE), "Yes", 
-                          ifelse(any(hba1c_summary == "No", na.rm = TRUE), "No", 
-                                 NA)),
+                           ifelse(any(hba1c_summary == "No", na.rm = TRUE), "No", 
+                                  NA)),
     
     egfr_result = ifelse(all(is.na(egfr_result)), NA, max(egfr_result, na.rm = TRUE)),
     egfr_summary = ifelse(any(egfr_summary == "Yes", na.rm = TRUE), "Yes", 
@@ -740,13 +802,13 @@ phosp_bloods_table = phosp %>%
     
     ddi_result = ifelse(all(is.na(ddi_result)), NA, max(ddi_result, na.rm = TRUE)),
     ddi_summary = ifelse(any(ddi_summary == "Yes", na.rm = TRUE), "Yes", 
-                          ifelse(any(ddi_summary == "No", na.rm = TRUE), "No", 
-                                 NA)),
+                         ifelse(any(ddi_summary == "No", na.rm = TRUE), "No", 
+                                NA)),
     
     crp_result = ifelse(all(is.na(crp_result )), NA, max(crp_result , na.rm = TRUE)),
     crp_summary = ifelse(any(crp_summary  == "Yes", na.rm = TRUE), "Yes", 
-                          ifelse(any(crp_summary == "No", na.rm = TRUE), "No", 
-                                 NA)),
+                         ifelse(any(crp_summary == "No", na.rm = TRUE), "No", 
+                                NA)),
   ) %>% 
   ff_relabel_df(phosp)
 
@@ -894,7 +956,7 @@ p1 = phosp_3m %>%
   left_join(phosp_bloods_table) %>% 
   left_join(phosp_cluster) %>% 
   select(crp_result, crf3a_bmi, cluster) %>% 
- filter(crf3a_bmi < 70) %>% 
+  filter(crf3a_bmi < 70) %>% 
   drop_na() %T>% 
   {total_n <<- dim(.)[[1]]} %>% 
   ggplot_lancet(aes(crf3a_bmi, crp_result, colour = cluster)) +

@@ -23,7 +23,7 @@ phosp = phosp %>%
     # Tier 
     tier = if_else(study_id %in% tier2_study_id, 2, 1),
     
-    # Explanatory variables ----
+    # Explanatory variables ------------------
     ## Age
     age_admission_factor = case_when(
       age_admission < 30 ~ "<30",
@@ -166,7 +166,7 @@ phosp = phosp %>%
       fct_relevel("No comorbidity") %>% 
       ff_label("Number of comorbidities (factor)"), 
     
-    # Dates ----
+    # Dates ------------------
     ## Symptom duration
     crf1a_symptom_duration = (crf1a_date_adm - crf1a_date_first_symptoms) %>% 
       as.numeric("days") %>% 
@@ -178,7 +178,7 @@ phosp = phosp %>%
       ff_label("Admission duration (days)"),
     
     
-    # Comorbidities ----
+    # Comorbidities ------------------
     ## Make summary variables
     crf1a_com_card = rowSums(select(., dplyr::starts_with("crf1a_com_card"), -contains("other")) %>% 
                                mutate(across(everything(), ~ . == "Yes")),
@@ -242,28 +242,52 @@ phosp = phosp %>%
     crf1a_com_mh = ff_label(crf1a_com_mh, "Malignancy"), 
     crf1a_com_id = ff_label(crf1a_com_id, "Infectious disease"), 
     
-    # Anthro values ----
+    # Anthro values ------------------
     ## Height (character)
     crf3a_rest_height = parse_number(crf3a_rest_height),
     crf3a_rest_weight = parse_number(crf3a_rest_weight),
     crf3a_bmi = (crf3a_rest_weight / (crf3a_rest_height / 100)^2) %>% 
       ff_label("BMI"),
     
-    # PROMs ----
+    crf3a_bmi_5levels = case_when(
+      crf3a_bmi < 18.5 ~ "Underweight (<18.5)",
+      crf3a_bmi < 25 ~ "Normal weight (18.5 to 24.9)",
+      crf3a_bmi < 30 ~ "Overweight (25 to 29.9)",
+      crf3a_bmi < 40 ~ "Obese (30 to 39.9)",
+      is.na(crf3a_bmi) ~ NA_character_,
+      TRUE ~ "Severe obesity (40+)"
+    ) %>% 
+      factor() %>% 
+      fct_relevel("Underweight (<18.5)", "Normal weight (18.5 to 24.9)",
+                  "Overweight (25 to 29.9)", "Obese (30 to 39.9)",
+                  "Severe obesity (40+)") %>% 
+      ff_label("BMI (5 levels)"), 
+    
+    crf3a_bmi_2levels = case_when(
+      crf3a_bmi < 30 ~ "BMI < 30 kg/m^2",
+      is.na(crf3a_bmi) ~ NA_character_,
+      TRUE ~ "BMI 30+ kg/m^2"
+    ) %>% 
+      factor() %>% 
+      fct_relevel("BMI < 30 kg/m^2", "BMI 30+ kg/m^2") %>% 
+      ff_label("BMI (2 levels)"),
+    
+    
+    
+    # PROMs ------------------
     ## EQ5D
     eq5d5l_summary_pre = parse_number(eq5d5l_summary_pre),
     eq5d5l_summary = parse_number(eq5d5l_summary),
     eq5d5l_summary_delta = (eq5d5l_summary - eq5d5l_summary_pre) %>% 
       ff_label("How good or bad is your health overall? 3 months vs pre-covid"),
     
-    # Can be removed if no error
-    # eq5d5l_summary_delta_change = case_when(
-    #   eq5d5l_summary_delta == 0 ~ "No change",
-    #   eq5d5l_summary_delta > 0 ~ "Improvement",
-    #   eq5d5l_summary_delta < 0 ~ "Worse"
-    # )   %>% 
-    #   factor() %>% 
-    #   fct_relevel("No change"),
+    eq5d5l_summary_delta_change = case_when(
+      eq5d5l_summary_delta == 0 ~ "No change",
+      eq5d5l_summary_delta > 0 ~ "Improvement",
+      eq5d5l_summary_delta < 0 ~ "Worse"
+    )   %>%
+      factor() %>%
+      fct_relevel("No change"),
     
     
     ## EQ5D sum across domains. as.numeric makes lowest == 1, so subtract 1 for zero as reference
@@ -287,7 +311,7 @@ phosp = phosp %>%
     eq5d5l_q4_delta = eq5d5l_q1_numeric - eq5d5l_q4_pre_numeric,
     eq5d5l_q5_delta = eq5d5l_q1_numeric - eq5d5l_q5_pre_numeric,
     
-    across(matches("eq5d5l_.*_delta"), ~ case_when(
+    across(matches("eq5d5l_q.*_delta"), ~ case_when(
       . == 0 ~ "No change",
       . < 0 ~ "Improvement",
       . > 0 ~ "Worse"
@@ -307,7 +331,7 @@ phosp = phosp %>%
 
 ####################################################################
 
-crosswalk_lookup <- readxl::read_excel('crosswalk_lookup.xls',sheet = "EQ-5D-5L Value Sets")
+crosswalk_lookup <- readxl::read_excel('/home/eharrison/phosp_first_report/crosswalk_lookup.xls',sheet = "EQ-5D-5L Value Sets")
 
 ##################################################################
 
@@ -483,7 +507,7 @@ phosp = phosp %>%
       sppb_score <= 10 ~ "Yes",
       sppb_score > 10 ~ "No",
     ) %>% 
-      ff_label("SPPB (mobility disability"), 
+      ff_label("SPPB (mobility disability <=10"), 
     
     
     ## Rockwood clinical frailty score (RCF)
@@ -507,7 +531,7 @@ phosp = phosp %>%
     ## MOCA corrected is done below, because it needs a fill on education level. 
     
     
-    # Treatment -----
+    # Treatment -------------------
     across(c("crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac"), 
            ~ fct_recode(., 
                         NULL = "N/K") %>% 
@@ -515,7 +539,7 @@ phosp = phosp %>%
     ),
     
     
-    # Outcomes ----
+    # Outcomes ------------------
     ## Respiratory support
     crf1a_resp_support_8levels = case_when(
       crf1a_o2_ecmo == "Yes" ~ "ECMO", 
@@ -540,13 +564,13 @@ phosp = phosp %>%
     
     
     crf1a_resp_support_4levels = case_when(
-      crf1a_o2_ecmo == "Yes" ~ "IMV/RRT/ECMO", 
-      crf1a_treat_rrt == "Yes" ~ "IMV/RRT/ECMO",
-      crf1a_o2_imv == "Yes" ~ "IMV/RRT/ECMO", 
-      crf1a_o2_hfn == "Yes" ~ "CPAP/BIPAP/HFN", 
-      crf1a_o2_blniv == "Yes" ~ "CPAP/BIPAP/HFN", 
-      crf1a_o2_cpapv == "Yes" ~ "CPAP/BIPAP/HFN", 
-      crf1a_o2_supp == "Yes" ~ "O2",
+      crf1a_o2_ecmo == "Yes" ~ "WHO – class 7-9", 
+      crf1a_treat_rrt == "Yes" ~ "WHO – class 7-9",
+      crf1a_o2_imv == "Yes" ~ "WHO – class 7-9", 
+      crf1a_o2_hfn == "Yes" ~ "WHO – class 6", 
+      crf1a_o2_blniv == "Yes" ~ "WHO – class 6", 
+      crf1a_o2_cpapv == "Yes" ~ "WHO – class 6", 
+      crf1a_o2_supp == "Yes" ~ "WHO – class 5",
       is.na(crf1a_o2_ecmo) & 
         is.na(crf1a_treat_rrt) & 
         is.na(crf1a_o2_imv) & 
@@ -554,11 +578,12 @@ phosp = phosp %>%
         is.na(crf1a_o2_blniv) & 
         is.na(crf1a_o2_cpapv) & 
         is.na(crf1a_o2_supp) ~ NA_character_,
-      TRUE ~ "No respiratory support"
+      TRUE ~ "WHO – class 3-4"
     ) %>% 
       factor() %>% 
-      fct_relevel("No respiratory support", "O2", "CPAP/BIPAP/HFN", "IMV/RRT/ECMO") %>% 
-      ff_label("Maximal organ support")
+      fct_relevel("WHO – class 3-4", "WHO – class 5",	"WHO – class 6",	"WHO – class 7-9") %>% 
+      # Old levels: "No respiratory support", "O2", "CPAP/BIPAP/HFN", "IMV/RRT/ECMO") %>% 
+      ff_label("WHO clinical progression scale")
     
   ) %>% 
   ff_relabel_df(phosp) %>% 
@@ -919,7 +944,7 @@ phosp = phosp %>%
 
 rm(pcode_data, post_code_main_lookup, post_code_supp_lookup)
 
-# SARS-CoV-2 status
+# SARS-CoV-2 status ---------------------------------------------------------------------
 phosp_pcr = phosp %>% 
   filter(redcap_event_name == "Hospital Discharge") %>% 
   filter(redcap_repeat_instrument == "SARS-CoV-2 Swab PCR Test Result") %>% 
@@ -930,6 +955,10 @@ phosp_pcr = phosp %>%
                              ifelse(any(swab_pcr_result == "Indeterminate", na.rm = TRUE), "Indeterminate", 
                                     ifelse(any(swab_pcr_result == "Negative", na.rm = TRUE), "Negative", 
                                            NA))) %>% 
+      factor()) %>%
+  mutate( # Don't know why this required taken out of summarise. 
+    swab_pcr_result = 
+      fct_relevel(swab_pcr_result, "Negative", "Positive", "Indeterminate") %>% 
       ff_label("SARS-CoV-2 swab")
   )
 
@@ -1010,25 +1039,32 @@ tinnitus = "psq_tinnitus_since"
 
 all_symptoms = c(neuro, musculoskeletal, cardiorespiratory, gastrointestinal_genitourinary, psq_scale, psq, tinnitus)
 
+# NOTE, the way this works, all missing is defined for the 48 variables listed above. 
+# If variables added or removed, then the code below will need modified to catch "all missing". 
+
 phosp_3m = phosp_3m %>% 
   select(study_id, all_symptoms) %>% 
   mutate(
     across(psq_scale,  ~ if_else(. >= 3, 1, 0)),
     across(c(neuro, musculoskeletal, cardiorespiratory, gastrointestinal_genitourinary, psq), ~ if_else(. == "Yes", 1, 0)),
-    across(c(tinnitus), ~ if_else(. %in% c("Yes, most or all of the time", 
-                                           "Yes, a lot of the time", 
-                                           "Yes, some of the time"), 1, 0))
+    psq_tinnitus_since = case_when(
+      psq_tinnitus_since %in% c("Yes, most or all of the time", 
+                                "Yes, a lot of the time", 
+                                "Yes, some of the time") ~ 1,
+      is.na(psq_tinnitus_since) ~ NA_real_,
+      TRUE ~ 0
+    )
   ) %>% 
   mutate(
     symptom_count = rowSums(select(., -study_id), na.rm = TRUE) %>% 
       ff_label("Symptom count"),
+    symptom_missing = rowSums(select(., -study_id) %>% is.na()),
+    symptom_count = if_else(symptom_missing == 48, NA_real_, symptom_count),
     symptom_any = if_else(symptom_count > 0, "Yes", "No") %>% 
       ff_label("Any symptom at 3 months (%)")) %>% 
   select(study_id, symptom_count, symptom_any) %>% 
   left_join(phosp_3m, by = "study_id") %>% 
   ff_relabel_df(phosp_3m)
-
-
 
 
 # Temp out for testing -----------------------------------------------
