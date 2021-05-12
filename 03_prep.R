@@ -60,7 +60,7 @@ phosp = phosp %>%
         crf1b_eth == "(18) Other ethnic group - Any other ethnic group" ~ "Other",
       crf1b_eth == "Prefer not to say" ~ NA_character_
     ) %>% 
-      fct_relevel("White", "South Asian", "East Asian", "Black", "Mixed", "Other") %>% 
+      fct_relevel("White", "South Asian", "Black", "Mixed", "Other") %>% 
       ff_label("Ethnicity"),
     
     crf1b_eth_pft = case_when(
@@ -1019,6 +1019,7 @@ phosp_wt = phosp %>%
 # Define patients for 1st 1000 -  discharge before 30112020
 study_id_before_end_nov = phosp %>% 
   filter(crf1a_date_dis <= ymd(20201130)) %>% 
+  distinct(study_id) %>% 
   pull(study_id)
 
 # 3 month symptoms -----------------------------------------------------------

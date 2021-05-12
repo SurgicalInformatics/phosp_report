@@ -56,6 +56,11 @@ source("03_prep.R")
 source("05_kco.R")
 ```
 
+```{r eval=FALSE, include=FALSE}
+load("full_image_250321.Rdata")
+```
+
+
 ### Tier 2 cohort before 30 Nov 2020 with < 240 days follow-up
 
 ```{r}
@@ -594,6 +599,27 @@ fit_cc %>%
   ff_merge(fit_mixed_imputed, last_merge = TRUE) %>% 
   # dplyr::relocate(1, 2, 3, 4, 5, 7, 6, 8) %>% 
   mytable()
+```
+
+
+```{r eval=FALSE, include=FALSE}
+# Extra using age 50 cutoff and interaction
+dependent = "psq_recovered"
+explanatory = c("age_admission_factor*crf1a_sex", "crf1b_eth_5levels", "imd_quintile", "no_comorbid_3levels", "crf1a_resp_support_4levels", "crf1a_treat_ss", "crf1a_treat_at", "crf1a_treat_tdac")
+
+
+phosp_hosp %>%
+  mutate(
+    age_admission_factor = case_when(
+                 age_admission < 50 ~ "<50",
+                 is.na(age_admission) ~ NA_character_,
+                 TRUE ~ "50+"
+               ) %>% 
+                 fct_relevel("50+")
+  ) %>% 
+  finalfit(dependent, explanatory)
+
+
 ```
 
 
