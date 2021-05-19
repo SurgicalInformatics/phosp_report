@@ -14,8 +14,8 @@ library(lubridate)
 # phosp_hosp   = read_rds(paste0(datadir, "phsop_hosp_", timestamp, "_full.rds"))
 
 #Read Mspline lookup table
-# Mspline <- read.csv('/home/skerr/Git/phosp_analysis/tlco_kco_prediction/Mspline.csv')
-Mspline <- read.csv('Mspline.csv')
+Mspline <- read.csv('/home/eharrison/phosp_first_report/Mspline.csv')
+# Mspline <- read.csv('Mspline.csv')
 
 #################################################################
 

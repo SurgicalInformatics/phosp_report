@@ -4,7 +4,7 @@
 
 # To use this, set your REDCap API token as an environment variable.
 ## Uncomment and run the following line:
-# usethis::edit_r_environ()
+usethis::edit_r_environ()
 ## this opens up .Renviron, add your token, e.g. ccp_token = 2F3xxxxxxxxxxxxE0111
 ## Restart R
 
