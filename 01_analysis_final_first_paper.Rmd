@@ -43,7 +43,7 @@ source("03_prep.R")
 source("04_clustering.R")
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # For exploration 
 library(readr) # loaded with tidyverse anyway
 datadir = "/home/common/phosp/raw/"
@@ -56,7 +56,7 @@ source("03_prep.R")
 source("05_kco.R")
 ```
 
-```{r eval=FALSE, include=FALSE}
+```{r}
 load("full_image_250321.Rdata")
 ```
 

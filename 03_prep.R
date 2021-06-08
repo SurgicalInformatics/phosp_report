@@ -292,12 +292,12 @@ phosp = phosp %>%
     
     ## EQ5D sum across domains. as.numeric makes lowest == 1, so subtract 1 for zero as reference
     eq5d5l_total_pre = rowSums(select(., eq5d5l_q1_pre:eq5d5l_q5_pre) %>% 
-                                 mutate(across(everything(), ~ as.numeric(.) %>% {. - 1})),
+                                 mutate(across(everything(), ~ {as.numeric(.) - 1})),
                                na.rm = TRUE) %>% 
       ff_label("EQ5D sum of domains pre-covid"),
     
     eq5d5l_total = rowSums(select(., eq5d5l_q1:eq5d5l_q5) %>% 
-                             mutate(across(everything(), ~ as.numeric(.) %>% {. - 1})),
+                             mutate(across(everything(), ~ {as.numeric(.) - 1})),
                            na.rm = TRUE) %>% 
       ff_label("EQ5D sum of domains"),
     
@@ -482,18 +482,18 @@ phosp = phosp %>%
     
     ## Dyspoea-12
     dyspnoea12_summary = rowSums(select(., matches("^dysp")) %>% 
-                                   mutate(across(everything(), ~ as.numeric(.) %>% {. - 1})),
+                                   mutate(across(everything(), ~ {as.numeric(.) - 1})),
                                  na.rm = FALSE) %>% 
       ff_label("Dyspnoea-12 score"),
     
     ## BPI
     bpi_severity_summary = rowSums(select(., bpi_worst:bpi_rightnow) %>% 
-                                     mutate(across(everything(), ~ as.numeric(.) %>% {. - 1})),
+                                     mutate(across(everything(), ~ {as.numeric(.) - 1})),
                                    na.rm = FALSE) %>% 
       ff_label("BPI severity"),
     
     bpi_interference_summary = rowSums(select(., bpi_past24_general:bpi_past24_enjoyment) %>% 
-                                         mutate(across(everything(), ~ as.numeric(.) %>% {. - 1})),
+                                         mutate(across(everything(), ~ {as.numeric(.) - 1})),
                                        na.rm = FALSE) %>% 
       ff_label("BPI interference"),
     

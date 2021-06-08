@@ -1,3 +1,5 @@
+# Export numbers for Louise 21/04/21
+
 library(readr) # loaded with tidyverse anyway
 datadir = "/home/common/phosp/raw/"
 timestamp = "2021-03-26_0400"
