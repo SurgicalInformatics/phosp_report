@@ -196,7 +196,7 @@ dependent = "crf1a_resp_support_4levels"
 phosp_hosp %>% 
   summary_factorlist(dependent,  explanatory, 
                      na_include = TRUE, na_include_dependent = TRUE, 
-                     add_col_totals = TRUE, cont_nonpara = c(2, 4:20), p = TRUE, 
+                     add_col_totals = TRUE, cont_nonpara = c(2, 4:20), p = TRUE, digits = c(1, 1, 4, 1),
                      total_col = TRUE) %>% 
   ff_remove_ref() %>% 
   ff_column_totals(phosp_hosp, dependent) %>% 
@@ -204,6 +204,17 @@ phosp_hosp %>%
   mytable()
 ```
 
+```{r}
+phosp_hosp %>%
+  group_by(crf1a_resp_support_4levels) %>% 
+  filter(is.na(age_admission)) %>% 
+  count(age_admission)
+
+phosp_hosp %>%
+  group_by(crf1a_resp_support_4levels) %>% 
+  filter(is.na(crf1a_admission_duration)) %>% 
+  count(age_admission)
+```
 
 
 ## Table 2: Proportion unchanged, worse or better in terms of overall visual analogue score and EQ5D prior to hospitalisation and at follow-up stratified by severity of acute illness.
@@ -213,6 +224,7 @@ NOTE: psq_recovered numbers updated here.
 
 
 ```{r}
+dependent = "crf1a_resp_support_4levels"
 explanatory_differences = c("psq_recovered",
                             "eq5d5l_summary_pre",
                             "eq5d5l_summary",
@@ -234,7 +246,7 @@ phosp_3m %>%
   left_join(phosp_hosp %>% select(study_id, crf1a_resp_support_4levels)) %>% 
   summary_factorlist(dependent,  explanatory_differences,
                      na_include = TRUE, na_include_dependent = TRUE, 
-                     add_col_totals = TRUE, digits = c(2, 2, 3, 1),
+                     add_col_totals = TRUE, digits = c(2, 2, 4, 1),
                      total_col = TRUE, p = TRUE) %>% 
   mytable()
 ```
@@ -344,6 +356,18 @@ phosp_bloods_table = phosp %>%
   ) %>% 
   ff_relabel_df(phosp)
 
+# Added 28/07/2021
+## CRP>5
+
+phosp_bloods_table = phosp_bloods_table %>% 
+  mutate(
+    crp_summary5 = case_when(
+      crp_result > 5 ~ "Yes",
+      crp_result <= 5 ~ "No"
+    ) %>% 
+      ff_label("CRP (>5 mg/L)")
+  )
+
 explanatory_hrqol = c(
   "symptom_any",
   "symptom_count",
@@ -377,6 +401,7 @@ explanatory_hrqol = c(
   "egfr_summary",
   "ddi_result",
   "ddi_summary",
+  "crp_summary5",
   "crp_summary"
 )
 phosp_3m %>%
@@ -390,7 +415,7 @@ phosp_3m %>%
                      na_include = TRUE, na_include_dependent = TRUE, 
                      total_col = TRUE, cont_nonpara = c(2),
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
-                     p = TRUE) %>%
+                     p = TRUE, digits = c(1, 1, 4, 1)) %>%
   mytable()
 ```
 
@@ -415,7 +440,7 @@ phosp_3m %>%
                      na_include = TRUE, na_include_dependent = TRUE,
                      total_col = TRUE,
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
-                     p = TRUE) %>% 
+                     p = TRUE, digits = c(1, 1, 4, 1)) %>% 
   mytable()
 ```
 

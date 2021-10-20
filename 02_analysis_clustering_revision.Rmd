@@ -31,7 +31,7 @@ library(ggh4x)
 summary_factorlist <- purrr::partial(finalfit::summary_factorlist, na_to_prop = FALSE)
 ```
 
-```{r}
+```{r eval=FALSE, include=FALSE}
 # For exploration 
 library(readr) # loaded with tidyverse anyway
 datadir = "/home/common/phosp/raw/"
@@ -42,6 +42,11 @@ source("02_functions.R")
 source("03_prep.R")
 source("05_kco.R")
 ```
+
+```{r}
+load("full_image_010721.Rdata")
+```
+
 
 ### Tier 2 cohort before 30 Nov 2020 with < 240 days follow-up 
 
@@ -644,19 +649,34 @@ dependent = "cluster"
 phosp_hosp %>% 
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory, 
-                     na_include = TRUE, p = TRUE,
+                     na_include = TRUE, p = TRUE, digits = c(2, 2, 4, 1), 
                      add_col_totals = TRUE, column = FALSE, cont_nonpara = c(2, 4:20),
                      total_col = TRUE) %>% 
   mytable()
 ```
 
+```{r}
+phosp_hosp %>%
+  left_join(phosp_cluster) %>%
+  group_by(cluster) %>% 
+  filter(is.na(age_admission)) %>% 
+  count(age_admission)
+
+phosp_hosp %>%
+  left_join(phosp_cluster) %>%
+  group_by(cluster) %>% 
+  filter(is.na(crf1a_admission_duration)) %>% 
+  count(age_admission)
+
+```
 
 ### Column proportions
 ```{r}
 phosp_hosp %>% 
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory, 
-                     na_include = TRUE, p = TRUE, cont_nonpara = c(2, 4:20),
+                     na_include = TRUE, p = TRUE, digits = c(2, 2, 4, 1), 
+                     cont_nonpara = c(2, 4:20),
                      add_col_totals = TRUE, column = TRUE,
                      total_col = TRUE) %>% 
   mytable()
@@ -689,7 +709,7 @@ phosp_3m %>%
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory_differences,
                      na_include = TRUE, column = FALSE,
-                     add_col_totals = TRUE, digits = c(2, 2, 3, 1),
+                     add_col_totals = TRUE, digits = c(2, 2, 4, 1),
                      total_col = TRUE, p = TRUE) %>% 
   mytable()
 
@@ -702,7 +722,7 @@ phosp_3m %>%
   left_join(phosp_cluster) %>% 
   summary_factorlist(dependent,  explanatory_differences,
                      na_include = TRUE, column = TRUE,
-                     add_col_totals = TRUE, digits = c(2, 2, 3, 1),
+                     add_col_totals = TRUE, digits = c(2, 2, 4, 1),
                      total_col = TRUE, p = TRUE) %>% 
   mytable()
 
@@ -812,6 +832,16 @@ phosp_bloods_table = phosp %>%
   ) %>% 
   ff_relabel_df(phosp)
 
+phosp_bloods_table = phosp_bloods_table %>% 
+  mutate(
+    crp_summary5 = case_when(
+      crp_result > 5 ~ "Yes",
+      crp_result <= 5 ~ "No"
+    ) %>% 
+      ff_label("CRP (>5 mg/L)")
+  )
+
+
 explanatory_hrqol = c(
   "symptom_any",
   "symptom_count",
@@ -850,6 +880,7 @@ explanatory_hrqol = c(
   "egfr_summary",
   "ddi_result",
   "ddi_summary",
+  "crp_summary5",
   "crp_summary"
 )
 ```
@@ -870,7 +901,7 @@ phosp_3m %>%
                      na_include = TRUE, 
                      total_col = TRUE, column = FALSE,  cont_nonpara = c(2),
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
-                     p = TRUE) %>%
+                     p = TRUE, digits = c(2, 2, 4, 1)) %>%
   mytable()
 ```
 
@@ -892,7 +923,8 @@ phosp_3m %>%
                      na_include = TRUE, 
                      total_col = TRUE, column = TRUE, cont_nonpara = c(2),
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
-                     p = TRUE) %>%
+                     na_include_dependent = TRUE,
+                     p = TRUE, digits = c(2, 2, 4, 1)) %>%
   mytable()
 ```
 
@@ -919,7 +951,7 @@ phosp_3m %>%
                      na_include = TRUE, 
                      total_col = TRUE, column = FALSE, 
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
-                     p = TRUE) %>% 
+                     p = TRUE, digits = c(2, 2, 4, 1)) %>% 
   mytable()
 ```
 
@@ -933,7 +965,7 @@ phosp_3m %>%
                      na_include = TRUE, 
                      total_col = TRUE, column = TRUE, 
                      add_col_totals = TRUE, add_row_totals = TRUE, include_row_missing_col = FALSE,
-                     p = TRUE) %>% 
+                     p = TRUE, digits = c(2, 2, 4, 1)) %>% 
   mytable()
 ```
 
